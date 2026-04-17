@@ -10,6 +10,7 @@ public class Main {
         try {
             Lexer lex = new Lexer(args[0]);
             Token t;
+            Env env;
 
             while (true) {
                 t = lex.scan();

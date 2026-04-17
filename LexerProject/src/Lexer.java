@@ -127,10 +127,24 @@ public class Lexer {
                 return new Num(0);
             } else {
                 int value = 0;
+                double realValue = 0;
                 do {
                     value = 10 * value + Character.digit(ch, 10);
                     readch();
                 } while (Character.isDigit(ch));
+                if(ch == '.'){
+                    readch();
+                    realValue = value;
+                    double divisor = 10.0;
+                    do {
+                        realValue = realValue + Character.digit(ch, 10) / divisor;
+                        divisor = divisor * 10;
+                        readch();
+                    } while (Character.isDigit(ch));
+                }
+                if(realValue != 0){
+                    return new Num(realValue);
+                }
                 return new Num(value);
             }
         }
