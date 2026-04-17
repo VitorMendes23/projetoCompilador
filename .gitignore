@@ -1,0 +1,22 @@
+# Compiled Java files
+*.class
+*.jar
+*.war
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Build directories
+target/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE config files
+.vscode/
+*.swp
+*.swo

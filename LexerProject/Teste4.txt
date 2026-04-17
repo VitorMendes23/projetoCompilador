@@ -1,0 +1,26 @@
+{
+// Outro programa de teste
+int idade;
+string nome, texto;
+float bonus, salario;
+repeat{
+    write("Digite o seu nome: );
+    read(nome);
+    write("Digite o seu sobrenome");
+    read(sobrenome);
+    write("Digite a sua idade: ");
+    read (idade);
+    write("Digite o salario: ");
+    read (salrio);
+    write("Digite o bonus: ");
+    read (bonus);
+    if (idade>0 && salario > 0 and bonus >= 0){
+        salarioLiquido = +salario – salário*0.11) + (bonus –
+        109.);
+        texto = nome + " " + sobrenome + ":";
+        write (text);
+        write("Salario liquido: ");
+        write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+}

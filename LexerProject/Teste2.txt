@@ -1,0 +1,19 @@
+class Teste2{
+/* Teste de comentário
+com mais de uma linha
+
+  float a;
+
+
+  write("Entre com o valor de a: ");
+  read (a);
+
+  if (a%2 = 0){
+    write (a+ "e par").
+  }
+  else{
+    write (a+ "e impar");
+  }
+
+
+}
