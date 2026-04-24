@@ -16,16 +16,17 @@ public class Main {
                 t = lex.scan();
                 if (t.tag == -1) break;
                 if (t instanceof Num)
-                    System.out.println("NUM: " + t);
+                    System.out.println("<NUM, \"" + t.toString() + "\">");
                 else if (t instanceof Word) {
-                    //System.out.println("WORD: " + t + " (tag=" + t.tag + ")");
-                    System.out.println("WORD: " + t);
-                }
-                else {
-                    //System.out.println("TOKEN: " + (char) t.tag + " (tag=" + t.tag + ")");
-                    System.out.println("TOKEN: " + (char) t.tag);
+                    Word w = (Word) t;
+                    System.out.println("<" + w.toString() + ", \"" + w.getLexeme() + "\">");
+                } else {
+                    System.out.println("<'" + (char) t.tag + "', \"" + (char) t.tag + "\">");
                 }
             }
+            System.out.println("\n== TABELA DE SÍMBOLOS ==");
+            lex.printSymbolTable();
+
         } catch (FileNotFoundException e) {
             System.err.println("Arquivo não encontrado.");
         } catch (IOException e) {

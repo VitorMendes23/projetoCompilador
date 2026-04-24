@@ -6,6 +6,7 @@ public class Lexer {
     private int ch = ' ';          // mudado para int
     private FileReader file;
     private Hashtable<String, Word> words = new Hashtable<>();
+    private Hashtable<String, Id> symbolTable = new Hashtable<>();
 
     private void reserve(Word w) {
         words.put(w.getLexeme(), w);
@@ -162,6 +163,9 @@ public class Lexer {
             String s = sb.toString();
             Word w = words.get(s);
             if (w != null) return w;
+            if (!symbolTable.containsKey(s)) {
+                symbolTable.put(s, new Id(s, null)); // Adiciona identificador na tabela de simbolos
+            }
             return new Word(s, Tag.ID);
         }
 
@@ -186,5 +190,10 @@ public class Lexer {
         Token t = new Token(ch);
         ch = ' ';
         return t;
+    }
+    public void printSymbolTable() {
+        for (String key : symbolTable.keySet()) {
+            System.out.println(key);
+        }
     }
 }
