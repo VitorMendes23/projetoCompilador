@@ -1,26 +1,27 @@
 public class Num extends Token {
-    public final int value;
+    public final int intValue;
     public final double realValue;
+    public final boolean isReal;
 
     public Num(int value) {
         super(Tag.NUM);
-        this.value = value;
-        this.realValue = 0;
+        this.intValue = value;
+        this.realValue = 0.0;
+        this.isReal = false;
     }
 
     public Num(double realValue) {
         super(Tag.NUM);
-        this.value = 0;
+        this.intValue = 0;
         this.realValue = realValue;
+        this.isReal = true;
     }
 
     @Override
     public String toString() {
-        if (value != 0){
-            return "" + value;
-        }else if (realValue != 0){
-            return "" + realValue;
-        }
-        return "";
+        if (isReal)
+            return String.valueOf(realValue);
+        else
+            return String.valueOf(intValue);
     }
 }

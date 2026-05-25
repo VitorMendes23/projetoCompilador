@@ -10,21 +10,29 @@ public class Main {
         try {
             Lexer lex = new Lexer(args[0]);
             Token t;
-            Env env;
 
+            System.out.println("=== SAÍDA DE TOKENS ===");
             while (true) {
                 t = lex.scan();
                 if (t.tag == -1) break;
-                if (t instanceof Num)
-                    System.out.println("<NUM, \"" + t.toString() + "\">");
-                else if (t instanceof Word) {
+
+                if (t instanceof Num) {
+                    Num n = (Num) t;
+                    System.out.println("<NUM, " + n.toString() + ">");
+                } else if (t instanceof Literal) {
+                    Literal lit = (Literal) t;
+                    System.out.println("<LITERAL, \"" + lit.getValue() + "\">");
+                } else if (t instanceof Word) {
                     Word w = (Word) t;
-                    System.out.println("<" + w.toString() + ", \"" + w.getLexeme() + "\">");
+                    if (w.tag == Tag.ID)
+                        System.out.println("<ID, \"" + w.getLexeme() + "\">");
+                    else
+                        System.out.println("<" + w.getLexeme() + ">");
                 } else {
-                    System.out.println("<'" + (char) t.tag + "', \"" + (char) t.tag + "\">");
+                    System.out.println("<" + (char) t.tag + ">");
                 }
             }
-            System.out.println("\n== TABELA DE SÍMBOLOS ==");
+
             lex.printSymbolTable();
 
         } catch (FileNotFoundException e) {

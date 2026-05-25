@@ -1,5 +1,5 @@
 public class Id {
-    public String lexeme;  // nome do identificador
+    public String lexeme;
     public String type;
 
     public Id(String lexeme, String type) {
@@ -9,7 +9,6 @@ public class Id {
 
     @Override
     public String toString() {
-        return lexeme + " : " + type;
+        return lexeme + (type != null ? " : " + type : "");
     }
-
 }

@@ -3,13 +3,14 @@ import java.util.*;
 
 public class Lexer {
     public static int line = 1;
-    private int ch = ' ';          // mudado para int
+    private int ch = ' ';
     private FileReader file;
     private Hashtable<String, Word> words = new Hashtable<>();
-    private Hashtable<String, Id> symbolTable = new Hashtable<>();
+    private Env topEnv;
 
     private void reserve(Word w) {
         words.put(w.getLexeme(), w);
+        topEnv.put(w.getLexeme(), new Id(w.getLexeme(), "reserved"));
     }
 
     public Lexer(String fileName) throws FileNotFoundException {
@@ -19,13 +20,7 @@ public class Lexer {
             System.out.println("Arquivo não encontrado: " + fileName);
             throw e;
         }
-
-        /*
-        Palavras reservadas: class, int, string, float, if, else, do, while, repeat, until, read, write, not
-        Operadores relacionais: >=, <=, <> (dois caracteres juntos)
-        Operadores aditivos: +, -, or
-        Operadores multiplicativos: *, /, %, and
-        * */
+        topEnv = new Env(null);
 
         reserve(new Word("class", Tag.CLASS));
         reserve(new Word("int", Tag.INT));
@@ -42,10 +37,12 @@ public class Lexer {
         reserve(new Word("not", Tag.NOT));
         reserve(Word.True);
         reserve(Word.False);
+        reserve(Word.and);
+        reserve(Word.or);
     }
 
     private void readch() throws IOException {
-        ch = file.read();   // agora ch pode ser -1
+        ch = file.read();
     }
 
     private boolean readch(char c) throws IOException {
@@ -55,43 +52,57 @@ public class Lexer {
         return true;
     }
 
-    public Token scan() throws IOException {
-        // Fim do arquivo?
-        if (ch == -1) return new Token(-1);
+    private void error(String msg, int lineError) {
+        System.err.println("Erro léxico na linha " + lineError + ": " + msg);
+        System.exit(1);
+    }
 
-        // Ignora espaços, tabs, newlines, carriage returns
+    public Token scan() throws IOException {
+        // Ignora delimitadores e comentários
         while (true) {
             if (ch == ' ' || ch == '\t' || ch == '\b') {
                 readch();
+                continue;
             } else if (ch == '\n') {
                 line++;
                 readch();
-            } else if (ch == '\r') {   // ignora CR do Windows
+                continue;
+            } else if (ch == '\r') {
                 readch();
-            } else if (ch=='/') {// Ignora comentários
+                continue;
+            } else if (ch == '/') {
                 readch();
-
-                if (ch=='/') {
+                if (ch == '/') {
+                    // Comentário de linha
                     while (true) {
                         readch();
-                        if (ch == '\n') {
-                            line++;
-                            readch();
-                            break;
-                        }
+                        if (ch == '\n') { line++; break; }
+                        if (ch == -1) break;
                     }
-                } else if (ch=='*') {
+                    continue;
+                } else if (ch == '*') {
+                    // Comentário de bloco
+                    int startLine = line;
+                    readch(); // consome o '*', agora ch está no próximo caractere
+                    boolean closed = false;
                     while (true) {
-                        readch();
-                        if (ch=='\n') line++;
-                        if (ch=='*') {
-                            readch();
-                            if (ch=='/') {
-                                readch();
+                        if (ch == -1) {
+                            error("Comentário não fechado", startLine);
+                        }
+                        if (ch == '*') {
+                            readch(); // olha o próximo
+                            if (ch == '/') {
+                                closed = true;
+                                readch(); // consome o '/'
                                 break;
                             }
+                            // Se não for '/', continua (ch já é o próximo caractere)
+                        } else {
+                            if (ch == '\n') line++;
+                            readch();
                         }
                     }
+                    if (closed) continue;
                 } else {
                     return new Token('/');
                 }
@@ -104,14 +115,8 @@ public class Lexer {
         switch (ch) {
             case '<':
                 readch();
-                if (ch=='=') {
-                    readch();
-                    return Word.le;
-                }
-                else if (ch=='>') {
-                    readch();
-                    return Word.ne;
-                }
+                if (ch == '=') return Word.le;
+                else if (ch == '>') return Word.ne;
                 else return new Token('<');
             case '>':
                 if (readch('=')) return Word.ge;
@@ -121,32 +126,46 @@ public class Lexer {
                 else return new Token(':');
         }
 
-        // Números inteiros (sem zeros à esquerda)
+        // Números inteiros e reais
         if (Character.isDigit(ch)) {
-            if (Character.digit(ch, 10)==0) {
-                readch();
-                return new Num(0);
-            } else {
-                int value = 0;
-                double realValue = 0;
-                do {
-                    value = 10 * value + Character.digit(ch, 10);
+            int firstDigit = Character.digit(ch, 10);
+            readch();
+
+            if (firstDigit == 0) {
+                if (Character.isDigit(ch))
+                    error("Número com zero à esquerda: '0" + (char)ch + "...'", line);
+                if (ch == '.') {
                     readch();
-                } while (Character.isDigit(ch));
-                if(ch == '.'){
-                    readch();
-                    realValue = value;
+                    if (!Character.isDigit(ch)) error("Esperado dígito após ponto decimal", line);
+                    double realVal = 0.0;
                     double divisor = 10.0;
                     do {
-                        realValue = realValue + Character.digit(ch, 10) / divisor;
-                        divisor = divisor * 10;
+                        realVal = realVal + Character.digit(ch, 10) / divisor;
+                        divisor *= 10;
                         readch();
                     } while (Character.isDigit(ch));
+                    return new Num(realVal);
                 }
-                if(realValue != 0){
-                    return new Num(realValue);
+                return new Num(0);
+            } else {
+                int intVal = firstDigit;
+                while (Character.isDigit(ch)) {
+                    intVal = 10 * intVal + Character.digit(ch, 10);
+                    readch();
                 }
-                return new Num(value);
+                if (ch == '.') {
+                    readch();
+                    if (!Character.isDigit(ch)) error("Esperado dígito após ponto decimal", line);
+                    double realVal = intVal;
+                    double divisor = 10.0;
+                    do {
+                        realVal = realVal + Character.digit(ch, 10) / divisor;
+                        divisor *= 10;
+                        readch();
+                    } while (Character.isDigit(ch));
+                    return new Num(realVal);
+                }
+                return new Num(intVal);
             }
         }
 
@@ -156,44 +175,43 @@ public class Lexer {
             do {
                 sb.append((char) ch);
                 readch();
-                // AND e OR
-                if (sb.toString().equals("and") && !Character.isLetterOrDigit(ch)) return Word.and;
-                if (sb.toString().equals("or") && !Character.isLetterOrDigit(ch)) return Word.or;
             } while (Character.isLetterOrDigit(ch));
+
             String s = sb.toString();
             Word w = words.get(s);
             if (w != null) return w;
-            if (!symbolTable.containsKey(s)) {
-                symbolTable.put(s, new Id(s, null)); // Adiciona identificador na tabela de simbolos
+
+            Id id = topEnv.get(s);
+            if (id == null) {
+                id = new Id(s, null);
+                topEnv.put(s, id);
             }
             return new Word(s, Tag.ID);
         }
 
-        // Literal
-        if (ch==34) {
+        // Literal (string entre aspas duplas)
+        if (ch == '"') {
+            int startLine = line;
             StringBuilder sb = new StringBuilder();
-            while (true) {
-                readch();
-                if (ch==34) {
-                    readch();
-                    break;
-                }
+            readch();
+            while (ch != '"') {
+                if (ch == '\n' || ch == -1)
+                    error("Literal não fechado", startLine);
                 sb.append((char) ch);
+                readch();
             }
-            String s = sb.toString();
-            Word w = words.get(s);
-            if (w != null) return w;
-            return new Word(s, Tag.ID);
+            readch();
+            return new Literal(sb.toString());
         }
 
-        // Qualquer outro caractere (pontuação, operadores simples, etc.)
+        // Outros caracteres
         Token t = new Token(ch);
         ch = ' ';
         return t;
     }
+
     public void printSymbolTable() {
-        for (String key : symbolTable.keySet()) {
-            System.out.println(key);
-        }
+        System.out.println("\n=== TABELA DE SÍMBOLOS ===");
+        topEnv.print();
     }
 }
