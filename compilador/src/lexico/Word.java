@@ -1,3 +1,5 @@
+package lexico;
+
 public class Word extends Token {
     private String lexeme = "";
 

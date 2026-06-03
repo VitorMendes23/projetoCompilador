@@ -1,5 +1,10 @@
+package lexico;
+
 import java.io.*;
 import java.util.*;
+
+import tabela.Id;
+import tabela.Env;
 
 public class Lexer {
     public static int line = 1;

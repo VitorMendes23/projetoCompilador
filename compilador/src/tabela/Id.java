@@ -1,3 +1,5 @@
+package tabela;
+
 public class Id {
     public String lexeme;
     public String type;

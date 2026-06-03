@@ -1,3 +1,5 @@
+package lexico;
+
 public class Num extends Token {
     public final int intValue;
     public final double realValue;

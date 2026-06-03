@@ -1,3 +1,5 @@
+package lexico;
+
 public class Tag {
     public static final int CLASS   = 256;
     public static final int INT     = 257;
