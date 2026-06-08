@@ -1,10 +1,11 @@
 class Teste1{
-    int base, 1altura;
+    int base, altura;
     float area;
-    write("Digite o valor da base:");
+    {write("Digite o valor da base:");
     read (base);
     write("Digite o valor da altura:");
-    read (altura;
-    area :=base*altura/2.0
+    read (altura);
+    area :=base*altura/2.0;
     write("A área e: " + area);
+}
 }

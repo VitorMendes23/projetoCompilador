@@ -1,20 +1,30 @@
 package sintatico;
 
-import java.io.*;
-
 import lexico.*;
 
 public class Parser {
-    private Lexer lexer;
-    private Token look;
+    private Lexer lex;
+    private Token lookahead;
 
-    public Parser(Lexer lexer) throws IOException {
-        this.lexer = lexer;
-        move();
+    public Parser(Lexer lex) {
+        this.lex = lex;
+        advance();
     }
 
-    private void move() throws IOException {
-        look = lexer.scan();
+    private void advance() {
+        try {
+            lookahead = lex.scan();
+        } catch (Exception e) {
+            error("Erro de leitura: " + e.getMessage());
+        }
+    }
+
+    private void match(int tag) {
+        if (lookahead.tag == tag) {
+            advance();
+        } else {
+            error("Esperado " + tagToString(tag) + ", encontrado " + tokenToString(lookahead));
+        }
     }
 
     private void error(String msg) {
@@ -22,172 +32,141 @@ public class Parser {
         System.exit(1);
     }
 
-    private String tokenLexeme(Token t) {
-        if (t instanceof Word) return ((Word) t).getLexeme();
-        if (t instanceof Num) return ((Num) t).toString();
-        if (t instanceof Literal) return "\"" + ((Literal) t).getValue() + "\"";
-        if (t.tag == -1) return "fim de arquivo";
-        if (t.tag >= 32 && t.tag < 127) return String.valueOf((char) t.tag);
-        return String.valueOf(t.tag);
-    }
-
-    private String expectedDesc(int tag) {
-        switch (tag) {
-            case Tag.CLASS: return "'class'";
-            case Tag.ID: return "identificador";
-            case Tag.NUM: return "constante numérica";
-            case Tag.LITERAL: return "literal";
-            case Tag.INT: return "'int'";
-            case Tag.STRING: return "'string'";
-            case Tag.FLOAT: return "'float'";
-            case Tag.IF: return "'if'";
-            case Tag.ELSE: return "'else'";
-            case Tag.DO: return "'do'";
-            case Tag.WHILE: return "'while'";
-            case Tag.REPEAT: return "'repeat'";
-            case Tag.UNTIL: return "'until'";
-            case Tag.READ: return "'read'";
-            case Tag.WRITE: return "'write'";
-            case Tag.NOT: return "'not'";
-            case Tag.ATR: return "':='";
-            case Tag.LE: return "'<='";
-            case Tag.GE: return "'>='";
-            case Tag.NE: return "'<>'";
-            case Tag.OR: return "'or'";
-            case Tag.AND: return "'and'";
-            case Tag.TRUE: return "'true'";
-            case Tag.FALSE: return "'false'";
-            default:
-                if (tag >= 32 && tag < 127) return "'" + (char) tag + "'";
-                return String.valueOf(tag);
-        }
-    }
-
-    private void match(int tag) throws IOException {
-        if (look.tag == tag) {
-            move();
+    private String tagToString(int tag) {
+        if (tag >= 256) {
+            switch (tag) {
+                case Tag.CLASS: return "class";
+                case Tag.INT: return "int";
+                case Tag.STRING: return "string";
+                case Tag.FLOAT: return "float";
+                case Tag.IF: return "if";
+                case Tag.ELSE: return "else";
+                case Tag.DO: return "do";
+                case Tag.WHILE: return "while";
+                case Tag.REPEAT: return "repeat";
+                case Tag.UNTIL: return "until";
+                case Tag.READ: return "read";
+                case Tag.WRITE: return "write";
+                case Tag.NOT: return "not";
+                case Tag.LE: return "<=";
+                case Tag.GE: return ">=";
+                case Tag.NE: return "<>";
+                case Tag.OR: return "or";
+                case Tag.AND: return "and";
+                case Tag.ATR: return ":=";
+                case Tag.NUM: return "número";
+                case Tag.ID: return "identificador";
+                case Tag.LITERAL: return "literal";
+                default: return "token desconhecido";
+            }
         } else {
-            error("encontrado " + tokenLexeme(look) + ", esperado " + expectedDesc(tag));
+            return "'" + (char) tag + "'";
         }
     }
 
-    public void parse() throws IOException {
-        program();
-        if (look.tag != -1) {
-            error("encontrado " + tokenLexeme(look) + " após o fim do programa");
+    private String tokenToString(Token t) {
+        if (t instanceof Word) {
+            return "'" + ((Word) t).getLexeme() + "'";
+        } else if (t instanceof Num) {
+            return "número " + t.toString();
+        } else if (t instanceof Literal) {
+            return "literal \"" + ((Literal) t).getValue() + "\"";
+        } else if (t.tag == -1) {
+            return "fim de arquivo";
+        } else {
+            return "'" + (char) t.tag + "'";
         }
-        System.out.println("Programa sintaticamente correto!");
     }
 
-    // program ::= class identifier { decl_list body }
-    private void program() throws IOException {
+    // ------------------ não-terminais principais ------------------
+
+    public void program() {
         match(Tag.CLASS);
         match(Tag.ID);
         match('{');
-        declList();
+        if (isDeclListStart()) {
+            declList();
+        }
         body();
         match('}');
+        if (lookahead.tag != -1) {
+            error("Conteúdo extra após o fim do programa");
+        }
     }
 
-    // body ::= { stmt_list }
-    private void body() throws IOException {
-        match('{');
-        stmtList();
-        match('}');
+    private boolean isDeclListStart() {
+        return lookahead.tag == Tag.INT || lookahead.tag == Tag.STRING || lookahead.tag == Tag.FLOAT;
     }
 
-    // decl_list ::= decl ; decl_list | ε
-    private void declList() throws IOException {
-        while (isStartOfDecl()) {
+    private void declList() {
+        decl();
+        match(';');
+        while (isDeclListStart()) {
             decl();
             match(';');
         }
     }
 
-    private boolean isStartOfDecl() {
-        return look.tag == Tag.INT || look.tag == Tag.STRING || look.tag == Tag.FLOAT;
-    }
-
-    // decl ::= type ident_list
-    private void decl() throws IOException {
+    private void decl() {
         type();
         identList();
     }
 
-    // ident_list ::= identifier ident_list'
-    private void identList() throws IOException {
-        match(Tag.ID);
-        identListPrime();
+    private void type() {
+        if (lookahead.tag == Tag.INT) match(Tag.INT);
+        else if (lookahead.tag == Tag.STRING) match(Tag.STRING);
+        else if (lookahead.tag == Tag.FLOAT) match(Tag.FLOAT);
+        else error("Esperado tipo (int, string, float)");
     }
 
-    // ident_list' ::= , identifier ident_list' | ε
-    private void identListPrime() throws IOException {
-        while (look.tag == ',') {
+    private void identList() {
+        match(Tag.ID);
+        while (lookahead.tag == ',') {
             match(',');
             match(Tag.ID);
         }
     }
 
-    // type ::= int | string | float
-    private void type() throws IOException {
-        if (isStartOfDecl()) {
-            move();
-        } else {
-            error("encontrado " + tokenLexeme(look) + ", esperado tipo (int, string ou float)");
-        }
+    private void body() {
+        match('{');
+        stmtList();
+        match('}');
     }
 
-    // stmt_list ::= stmt ; { stmt ; }
-    private void stmtList() throws IOException {
+    private void stmtList() {
         stmt();
         match(';');
-        while (isStartOfStmt()) {
+        while (isStmtStart()) {
             stmt();
             match(';');
         }
     }
 
-    private boolean isStartOfStmt() {
-        return look.tag == Tag.ID || look.tag == Tag.IF || look.tag == Tag.DO ||
-               look.tag == Tag.REPEAT || look.tag == Tag.READ || look.tag == Tag.WRITE;
+    private boolean isStmtStart() {
+        int t = lookahead.tag;
+        return t == Tag.ID || t == Tag.IF || t == Tag.DO ||
+                t == Tag.REPEAT || t == Tag.READ || t == Tag.WRITE;
     }
 
-    // stmt ::= assign_stmt | if_stmt | do_stmt | repeat_stmt | read_stmt | write_stmt
-    private void stmt() throws IOException {
-        switch (look.tag) {
-            case Tag.ID:
-                assignStmt();
-                break;
-            case Tag.IF:
-                ifStmt();
-                break;
-            case Tag.DO:
-                doStmt();
-                break;
-            case Tag.REPEAT:
-                repeatStmt();
-                break;
-            case Tag.READ:
-                readStmt();
-                break;
-            case Tag.WRITE:
-                writeStmt();
-                break;
-            default:
-                error("encontrado " + tokenLexeme(look) +
-                      ", esperado início de comando (identificador, if, do, repeat, read ou write)");
+    private void stmt() {
+        switch (lookahead.tag) {
+            case Tag.ID: assignStmt(); break;
+            case Tag.IF: ifStmt(); break;
+            case Tag.DO: doStmt(); break;
+            case Tag.REPEAT: repeatStmt(); break;
+            case Tag.READ: readStmt(); break;
+            case Tag.WRITE: writeStmt(); break;
+            default: error("Comando inválido");
         }
     }
 
-    // assign_stmt ::= identifier := simple_expr
-    private void assignStmt() throws IOException {
+    private void assignStmt() {
         match(Tag.ID);
         match(Tag.ATR);
         simpleExpr();
     }
 
-    // if_stmt ::= if ( condition ) { stmt_list } else_part
-    private void ifStmt() throws IOException {
+    private void ifStmt() {
         match(Tag.IF);
         match('(');
         condition();
@@ -195,21 +174,20 @@ public class Parser {
         match('{');
         stmtList();
         match('}');
-        elsePart();
+        ifStmtPrime();
     }
 
-    // else_part ::= else { stmt_list } | ε
-    private void elsePart() throws IOException {
-        if (look.tag == Tag.ELSE) {
+    private void ifStmtPrime() {
+        if (lookahead.tag == Tag.ELSE) {
             match(Tag.ELSE);
             match('{');
             stmtList();
             match('}');
         }
+        // λ
     }
 
-    // do_stmt ::= do { stmt_list } do_suffix
-    private void doStmt() throws IOException {
+    private void doStmt() {
         match(Tag.DO);
         match('{');
         stmtList();
@@ -217,16 +195,14 @@ public class Parser {
         doSuffix();
     }
 
-    // do_suffix ::= while ( condition )
-    private void doSuffix() throws IOException {
+    private void doSuffix() {
         match(Tag.WHILE);
         match('(');
         condition();
         match(')');
     }
 
-    // repeat_stmt ::= repeat { stmt_list } stmt_suffix
-    private void repeatStmt() throws IOException {
+    private void repeatStmt() {
         match(Tag.REPEAT);
         match('{');
         stmtList();
@@ -234,129 +210,79 @@ public class Parser {
         stmtSuffix();
     }
 
-    // stmt_suffix ::= until ( condition )
-    private void stmtSuffix() throws IOException {
+    private void stmtSuffix() {
         match(Tag.UNTIL);
         match('(');
         condition();
         match(')');
     }
 
-    // read_stmt ::= read ( identifier )
-    private void readStmt() throws IOException {
+    private void readStmt() {
         match(Tag.READ);
         match('(');
         match(Tag.ID);
         match(')');
     }
 
-    // write_stmt ::= write ( writable )
-    private void writeStmt() throws IOException {
+    private void writeStmt() {
         match(Tag.WRITE);
         match('(');
         writable();
         match(')');
     }
 
-    // writable ::= simple_expr
-    private void writable() throws IOException {
+    private void writable() {
         simpleExpr();
     }
 
-    // condition ::= expression
-    private void condition() throws IOException {
+    private void condition() {
         expression();
     }
 
-    // expression ::= simple_expr expression'
-    private void expression() throws IOException {
+    // ------------------ expressões ------------------
+
+    private void expression() {
         simpleExpr();
         expressionPrime();
     }
 
-    // expression' ::= relop simple_expr | ε
-    private void expressionPrime() throws IOException {
+    private void expressionPrime() {
         if (isRelop()) {
             relop();
             simpleExpr();
         }
+        // λ
     }
 
-    private boolean isRelop() {
-        return look.tag == '>' || look.tag == Tag.GE ||
-               look.tag == '<' || look.tag == Tag.LE ||
-               look.tag == Tag.NE || look.tag == '=';
-    }
-
-    // relop ::= > | >= | < | <= | <> | =
-    private void relop() throws IOException {
-        if (isRelop()) {
-            move();
-        } else {
-            error("encontrado " + tokenLexeme(look) + ", esperado operador relacional");
-        }
-    }
-
-    // simple_expr ::= term simple_expr'
-    private void simpleExpr() throws IOException {
+    private void simpleExpr() {
         term();
         simpleExprPrime();
     }
 
-    // simple_expr' ::= addop term simple_expr' | ε
-    private void simpleExprPrime() throws IOException {
+    private void simpleExprPrime() {
         while (isAddop()) {
             addop();
             term();
         }
     }
 
-    private boolean isAddop() {
-        return look.tag == '+' || look.tag == '-' || look.tag == Tag.OR;
-    }
-
-    // addop ::= + | - | or
-    private void addop() throws IOException {
-        if (isAddop()) {
-            move();
-        } else {
-            error("encontrado " + tokenLexeme(look) + ", esperado operador aditivo (+, - ou or)");
-        }
-    }
-
-    // term ::= factor_a term'
-    private void term() throws IOException {
+    private void term() {
         factorA();
         termPrime();
     }
 
-    // term' ::= mulop factor_a term' | ε
-    private void termPrime() throws IOException {
+    private void termPrime() {
         while (isMulop()) {
             mulop();
             factorA();
         }
     }
 
-    private boolean isMulop() {
-        return look.tag == '*' || look.tag == '/' || look.tag == '%' || look.tag == Tag.AND;
-    }
-
-    // mulop ::= * | / | % | and
-    private void mulop() throws IOException {
-        if (isMulop()) {
-            move();
-        } else {
-            error("encontrado " + tokenLexeme(look) + ", esperado operador multiplicativo (*, /, % ou and)");
-        }
-    }
-
-    // factor_a ::= factor | not factor | - factor
-    private void factorA() throws IOException {
-        if (look.tag == Tag.NOT) {
+    private void factorA() {
+        if (lookahead.tag == Tag.NOT) {
             match(Tag.NOT);
             factor();
-        } else if (look.tag == '-') {
+        } else if (lookahead.tag == '-') {
             match('-');
             factor();
         } else {
@@ -364,17 +290,59 @@ public class Parser {
         }
     }
 
-    // factor ::= identifier | constant | ( expression )
-    private void factor() throws IOException {
-        if (look.tag == Tag.ID || look.tag == Tag.NUM || look.tag == Tag.LITERAL) {
-            move();
-        } else if (look.tag == '(') {
+    private void factor() {
+        if (lookahead.tag == Tag.ID) {
+            match(Tag.ID);
+        } else if (lookahead.tag == Tag.NUM || lookahead.tag == Tag.LITERAL) {
+            constant();
+        } else if (lookahead.tag == '(') {
             match('(');
             expression();
             match(')');
         } else {
-            error("encontrado " + tokenLexeme(look) +
-                  ", esperado identificador, constante numérica, literal ou '('");
+            error("Fator esperado (identificador, constante, '(')");
         }
+    }
+
+    private void constant() {
+        if (lookahead.tag == Tag.NUM) {
+            match(Tag.NUM);
+        } else if (lookahead.tag == Tag.LITERAL) {
+            match(Tag.LITERAL);
+        } else {
+            error("Constante esperada (número ou literal)");
+        }
+    }
+
+    // ------------------ operadores ------------------
+
+    private boolean isRelop() {
+        int t = lookahead.tag;
+        return t == '>' || t == Tag.GE || t == '<' || t == Tag.LE || t == Tag.NE || t == '=';
+    }
+
+    private void relop() {
+        if (isRelop()) advance();
+        else error("Operador relacional esperado");
+    }
+
+    private boolean isAddop() {
+        int t = lookahead.tag;
+        return t == '+' || t == '-' || t == Tag.OR;
+    }
+
+    private void addop() {
+        if (isAddop()) advance();
+        else error("Operador aditivo esperado (+, -, or)");
+    }
+
+    private boolean isMulop() {
+        int t = lookahead.tag;
+        return t == '*' || t == '/' || t == '%' || t == Tag.AND;
+    }
+
+    private void mulop() {
+        if (isMulop()) advance();
+        else error("Operador multiplicativo esperado (*, /, %, and)");
     }
 }

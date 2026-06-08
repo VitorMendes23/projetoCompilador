@@ -1,7 +1,7 @@
-import java.io.*;
+import lexico.Lexer;
+import sintatico.Parser;
 
-import lexico.*;
-import sintatico.*;
+import java.io.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -13,8 +13,8 @@ public class Main {
         try {
             Lexer lex = new Lexer(args[0]);
             Parser parser = new Parser(lex);
-            parser.parse();
-
+            parser.program();
+            System.out.println("Programa sintaticamente correto.");
         } catch (FileNotFoundException e) {
             System.err.println("Arquivo não encontrado.");
         } catch (IOException e) {

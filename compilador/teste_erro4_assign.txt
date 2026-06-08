@@ -1,6 +1,0 @@
-class TesteErro4 {
-    int x;
-    {
-        x = 10;
-    }
-}

@@ -1,14 +1,14 @@
 package lexico;
 
+import tabela.Env;
+import tabela.Id;
+
 import java.io.*;
 import java.util.*;
 
-import tabela.Id;
-import tabela.Env;
-
 public class Lexer {
     public static int line = 1;
-    private int ch = ' ';
+    private int ch;
     private FileReader file;
     private Hashtable<String, Word> words = new Hashtable<>();
     private Env topEnv;
@@ -21,9 +21,13 @@ public class Lexer {
     public Lexer(String fileName) throws FileNotFoundException {
         try {
             file = new FileReader(fileName);
+            readch(); // inicializa ch com primeiro caractere
         } catch (FileNotFoundException e) {
             System.out.println("Arquivo não encontrado: " + fileName);
             throw e;
+        } catch (IOException e) {
+            System.err.println("Erro de leitura: " + e.getMessage());
+            System.exit(1);
         }
         topEnv = new Env(null);
 
@@ -63,7 +67,7 @@ public class Lexer {
     }
 
     public Token scan() throws IOException {
-        // Ignora delimitadores e comentários
+        // ignora delimitadores e comentários
         while (true) {
             if (ch == ' ' || ch == '\t' || ch == '\b') {
                 readch();
@@ -78,7 +82,6 @@ public class Lexer {
             } else if (ch == '/') {
                 readch();
                 if (ch == '/') {
-                    // Comentário de linha
                     while (true) {
                         readch();
                         if (ch == '\n') { line++; break; }
@@ -86,22 +89,20 @@ public class Lexer {
                     }
                     continue;
                 } else if (ch == '*') {
-                    // Comentário de bloco
                     int startLine = line;
-                    readch(); // consome o '*', agora ch está no próximo caractere
+                    readch();
                     boolean closed = false;
                     while (true) {
                         if (ch == -1) {
                             error("Comentário não fechado", startLine);
                         }
                         if (ch == '*') {
-                            readch(); // olha o próximo
+                            readch();
                             if (ch == '/') {
                                 closed = true;
-                                readch(); // consome o '/'
+                                readch();
                                 break;
                             }
-                            // Se não for '/', continua (ch já é o próximo caractere)
                         } else {
                             if (ch == '\n') line++;
                             readch();
@@ -111,27 +112,29 @@ public class Lexer {
                 } else {
                     return new Token('/');
                 }
+            } else if (ch == -1) {
+                return new Token(-1); // EOF
             } else {
                 break;
             }
         }
 
-        // Operadores compostos
+        // operadores compostos
         switch (ch) {
             case '<':
                 readch();
                 if (ch == '=') return Word.le;
-                else if (ch == '>') return Word.ne;
-                else return new Token('<');
+                if (ch == '>') return Word.ne;
+                return new Token('<');
             case '>':
                 if (readch('=')) return Word.ge;
-                else return new Token('>');
+                return new Token('>');
             case ':':
                 if (readch('=')) return Word.atr;
-                else return new Token(':');
+                return new Token(':');
         }
 
-        // Números inteiros e reais
+        // números inteiros e reais
         if (Character.isDigit(ch)) {
             int firstDigit = Character.digit(ch, 10);
             readch();
@@ -174,7 +177,7 @@ public class Lexer {
             }
         }
 
-        // Identificadores e palavras reservadas
+        // identificadores e palavras reservadas
         if (Character.isLetter(ch)) {
             StringBuilder sb = new StringBuilder();
             do {
@@ -194,14 +197,14 @@ public class Lexer {
             return new Word(s, Tag.ID);
         }
 
-        // Literal (string entre aspas duplas)
+        // literal (string entre aspas)
         if (ch == '"') {
             int startLine = line;
             StringBuilder sb = new StringBuilder();
             readch();
             while (ch != '"') {
                 if (ch == '\n' || ch == -1)
-                    error("Literal não fechado", startLine);
+                    error("lexico.Literal não fechado", startLine);
                 sb.append((char) ch);
                 readch();
             }
@@ -209,9 +212,9 @@ public class Lexer {
             return new Literal(sb.toString());
         }
 
-        // Outros caracteres
+        // caracteres simples
         Token t = new Token(ch);
-        ch = ' ';
+        readch(); // avança para o próximo caractere
         return t;
     }
 
