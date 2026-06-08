@@ -1,0 +1,24 @@
+class Teste6 {
+    int numero, soma;
+    string mensagem;
+
+    soma := 0;
+
+    repeat {
+        write("Digite um numero (negativo para sair): ");
+        read(numero);
+
+        if (numero >= 0) {
+            if (numero % 2 = 0) {
+                mensagem := " par";
+            } else {
+                mensagem := " impar";
+            }
+            write("O numero " + numero + " eh" + mensagem);
+            soma := soma + numero;
+        }
+    } until (numero < 0);
+
+    write("Soma total: ");
+    write(soma);
+}
