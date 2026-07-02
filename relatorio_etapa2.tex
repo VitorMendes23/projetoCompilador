@@ -1,0 +1,2227 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[brazilian]{babel}
+\addto\captionsbrazilian{
+  \renewcommand{\lstlistingname}{Código}
+  \renewcommand{\lstlistlistingname}{Lista de Códigos}
+}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{abstract}
+\setlength{\absleftindent}{0pt}
+\setlength{\absrightindent}{0pt}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\title{Compiladores -- Trabalho Prático (Parte 2) \\ Analisador Sintático Descendente Preditivo}
+\author{Alunos: Luan Marcelino de Souza e Vitor Mendes de Oliveira Abreu \\ Prof.ª Kércia Aline Marques Ferreira \\ CEFET-MG}
+\date{\today}
+
+\begin{document}
+
+\shorthandoff{"}
+
+\maketitle
+
+\begin{abstract}
+Este relatório descreve a segunda etapa do trabalho prático da disciplina de Compiladores: o desenvolvimento de um analisador sintático preditivo descendente recursivo implementado manualmente em Java. A gramática original foi modificada para adequar-se às restrições de uma gramática $LL(1)$ com eliminação de recursão à esquerda e fatoração à esquerda. São apresentados os conjuntos $FIRST$ e $FOLLOW$, a arquitetura do software organizada nos pacotes \texttt{lexico}, \texttt{sintatico} e \texttt{tabela}, e os resultados da análise sobre os casos de teste.
+\end{abstract}
+
+\section{Introdução}
+
+O analisador sintático é o componente do front-end de um compilador responsável por verificar se a sequência de tokens gerada pelo analisador léxico está em conformidade com a sintaxe formal da linguagem.
+
+Nesta etapa, estendendo a infraestrutura da Etapa 1, implementou-se manualmente um parser descendente preditivo por recursão mútua ($LL(1)$), no qual cada símbolo não-terminal da linguagem torna-se um método Java. O fluxo de análise é determinístico: a escolha entre produções alternativas é feita unicamente com base no token corrente (lookahead), sem necessidade de retrocesso.
+
+O código-fonte está organizado em três pacotes:
+\begin{itemize}
+    \item \texttt{lexico} --- classes do analisador léxico (\texttt{Lexer}, \texttt{Token}, \texttt{Tag}, \texttt{Word}, \texttt{Num}, \texttt{Literal})
+    \item \texttt{sintatico} --- analisador sintático (\texttt{Parser})
+    \item \texttt{tabela} --- tabela de símbolos (\texttt{Env}, \texttt{Id})
+\end{itemize}
+
+\section{Como usar o compilador (Fase Sintática)}
+
+\subsection{Compilação}
+
+\begin{lstlisting}[language=bash, caption=Compilação do analisador]
+javac -d out compilador\src\Main.java compilador\src\lexico\*.java compilador\src\tabela\*.java compilador\src\sintatico\*.java
+\end{lstlisting}
+
+\subsection{Execução}
+
+\begin{lstlisting}[language=bash, caption=Execução do parser]
+java -cp out Main compilador\Teste7.txt
+\end{lstlisting}
+
+O programa exibe \texttt{"Programa sintaticamente correto."} em caso de sucesso, ou aborta ao encontrar o primeiro erro sintático, indicando a linha e o token inesperado.
+
+\allowdisplaybreaks[4]
+
+\section{Gramática da Linguagem}
+
+A gramática da linguagem é apresentada a seguir, dividida em produções sintáticas (analisador sintático) e regras de formação de tokens (analisador léxico).
+
+\subsection{Produções Sintáticas}
+
+\begin{align*}
+\hspace*{2em}1.&\quad program &&::= \text{class } identifier \; \text{\{} \; {[decl\!-\!list]} \; body \; \text{\}} \\
+2.&\quad decl\!-\!list &&::= decl \; \text{;} \; \{ \; decl \; \text{;} \; \} \\
+3.&\quad decl &&::= type \; ident\!-\!list \\
+4.&\quad ident\!-\!list &&::= identifier \; \{ \; \text{,} \; identifier \; \} \\
+5.&\quad type &&::= \text{int} \\
+6.&\quad &&\mid \; \text{string} \\
+7.&\quad &&\mid \; \text{float} \\
+8.&\quad body &&::= \text{\{} \; stmt\!-\!list \; \text{\}} \\
+9.&\quad stmt\!-\!list &&::= stmt \; \text{;} \; \{ \; stmt \; \text{;} \; \} \\
+10.&\quad stmt &&::= assign\!-\!stmt \\
+11.&\quad &&\mid \; if\!-\!stmt \\
+12.&\quad &&\mid \; do\!-\!stmt \\
+13.&\quad &&\mid \; repeat\!-\!stmt \\
+14.&\quad &&\mid \; read\!-\!stmt \\
+15.&\quad &&\mid \; write\!-\!stmt \\
+16.&\quad assign\!-\!stmt &&::= identifier \; \text{:=} \; simple\!-\!expr \\
+17.&\quad if\!-\!stmt &&::= \text{if } \text{(} \; condition \; \text{)} \; \text{\{} \; stmt\!-\!list \; \text{\}} \; if\!-\!stmt' \\
+18.&\quad if\!-\!stmt' &&::= \text{else } \text{\{} \; stmt\!-\!list \; \text{\}} \\
+19.&\quad &&\mid \; \lambda \\
+20.&\quad do\!-\!stmt &&::= \text{do } \text{\{} \; stmt\!-\!list \; \text{\}} \; do\!-\!suffix \\
+21.&\quad do\!-\!suffix &&::= \text{while } \text{(} \; condition \; \text{)} \\
+22.&\quad repeat\!-\!stmt &&::= \text{repeat } \text{\{} \; stmt\!-\!list \; \text{\}} \; stmt\!-\!suffix \\
+23.&\quad stmt\!-\!suffix &&::= \text{until } \text{(} \; condition \; \text{)} \\
+24.&\quad read\!-\!stmt &&::= \text{read } \text{(} \; identifier \; \text{)} \\
+25.&\quad write\!-\!stmt &&::= \text{write } \text{(} \; writable \; \text{)} \\
+26.&\quad writable &&::= simple\!-\!expr \\
+27.&\quad condition &&::= expression \\
+28.&\quad expression &&::= simple\!-\!expr \; expression' \\
+29.&\quad expression' &&::= relop \; simple\!-\!expr \\
+30.&\quad &&\mid \; \lambda \\
+31.&\quad simple\!-\!expr &&::= term \; simple\!-\!expr' \\
+32.&\quad simple\!-\!expr' &&::= addop \; term \; simple\!-\!expr' \\
+33.&\quad &&\mid \; \lambda \\
+34.&\quad term &&::= factor\!-\!a \; term' \\
+35.&\quad term' &&::= mulop \; factor\!-\!a \; term' \\
+36.&\quad &&\mid \; \lambda \\
+37.&\quad factor\!-\!a &&::= factor \\
+38.&\quad &&\mid \; \text{not } factor \\
+39.&\quad &&\mid \; \text{-} factor \\
+40.&\quad factor &&::= identifier \\
+41.&\quad &&\mid \; constant \\
+42.&\quad &&\mid \; \text{(} \; expression \; \text{)} \\
+43.&\quad relop &&::= \text{>} \\
+44.&\quad &&\mid \; \text{>=} \\
+45.&\quad &&\mid \; \text{<} \\
+46.&\quad &&\mid \; \text{<=} \\
+47.&\quad &&\mid \; \text{<>} \\
+48.&\quad &&\mid \; \text{=} \\
+49.&\quad addop &&::= \text{+} \\
+50.&\quad &&\mid \; \text{-} \\
+51.&\quad &&\mid \; \text{or} \\
+52.&\quad mulop &&::= \text{*} \\
+53.&\quad &&\mid \; \text{/} \\
+54.&\quad &&\mid \; \text{\%} \\
+55.&\quad &&\mid \; \text{and}
+\intertext{\subsection{Regras de Formação de Tokens}}
+56.&\quad constant &&::= \mathit{integer\_const} \; \mathit{parte\_real} \\
+57.&\quad &&\mid \; literal \\
+58.&\quad \mathit{parte\_real} &&::= \text{.} \; digit^{+} \\
+59.&\quad &&\mid \; \lambda \\
+60.&\quad \mathit{integer\_const} &&\to nonzero \; digit^{*} \\
+61.&\quad &&\mid \; \text{0} \\
+62.&\quad literal &&\to \text{"} \; caractere^{*} \; \text{"} \\
+63.&\quad identifier &&\to letter \; (letter \mid digit)^{*} \\
+64.&\quad letter &&\to \text{[A-Za-z]} \\
+65.&\quad digit &&\to \text{[0-9]} \\
+66.&\quad nonzero &&\to \text{[1-9]} \\
+67.&\quad caractere &&\to \text{um dos 256 caracteres do conjunto} \\
+&\quad &&\quad \text{ASCII, exceto aspas e quebra de linha}
+\end{align*}
+
+\subsection{Modificações na Gramática para Adequação LL(1)}
+
+A gramática original fornecida foi modificada utilizando duas técnicas: eliminação de
+recursão à esquerda e fatoração à esquerda.
+
+\subsubsection{Eliminação de Recursão à Esquerda}
+
+\paragraph{Expressões:}
+\begin{align*}
+expression      &\to simple\!-\!expr \; expression' \\
+expression'     &\to relop \; simple\!-\!expr \mid \lambda
+\end{align*}
+
+\paragraph{Expressões Simples:}
+\begin{align*}
+simple\!-\!expr    &\to term \; simple\!-\!expr' \\
+simple\!-\!expr'   &\to addop \; term \; simple\!-\!expr' \mid \lambda
+\end{align*}
+
+Na implementação, \texttt{simpleExprPrime()} utiliza iteração (\texttt{while}) em vez de recursão, por
+ser equivalente para recursão.
+
+\paragraph{Termos:}
+\begin{align*}
+term    &\to factor\!-\!a \; term' \\
+term'   &\to mulop \; factor\!-\!a \; term' \mid \lambda
+\end{align*}
+
+Analogamente, \texttt{termPrime()} utiliza iteração.
+
+\subsubsection{Fatoração à Esquerda}
+
+O comando \texttt{if} possuía duas produções com prefixo comum:
+\begin{align*}
+if\!-\!stmt     &\to \text{if } \text{(} \; condition \; \text{)} \; \text{\{} \; stmt\!-\!list \; \text{\}} \; if\!-\!stmt' \\
+if\!-\!stmt'    &\to \text{else } \text{\{} \; stmt\!-\!list \; \text{\}} \mid \lambda
+\end{align*}
+
+O método correspondente é \texttt{ifStmtPrime()} no código.
+
+A constante também possuía duas produções com prefixo comum:
+\begin{align*}
+constant        &\to integer\_const \mid literal \mid real\_const \\
+real\_const     &\to integer\_const \; \text{"."} \; digit^{+}
+\end{align*}
+As alternativas \texttt{integer\_const} e \texttt{real\_const} compartilham o prefixo \texttt{integer\_const}, impossibilitando a decisão determinística para o parser $LL(1)$. Aplicou-se a fatoração à esquerda, introduzindo \texttt{parte\_real}:
+\begin{align*}
+constant        &\to integer\_const \; parte\_real \mid literal \\
+parte\_real     &\to \text{"."} \; digit^{+} \mid \lambda
+\end{align*}
+Agora, após reconhecer \texttt{integer\_const}, o parser consulta o lookahead: se for \texttt{"."}, escolhe \texttt{parte\_real \to "." digit^{+}} (constante real); caso contrário, escolhe $\lambda$ (constante inteira).
+
+
+\subsubsection{Observações sobre a implementação}
+
+\normalfont\normalsize
+
+Na implementação real, as produções com $*$, $+$ e listas ($decl\!-\!list$, $ident\!-\!list'$,
+$stmt\!-\!list$, $simple\!-\!expr'$, $term'$) foram implementadas com laços \texttt{while} em vez de recursão, por
+questão de eficiência e para evitar estouro de pilha em entradas grandes. A semântica é
+idêntica à das gramáticas recursivas apresentadas.
+
+O método \texttt{constant()} foi separado de \texttt{factor()}:
+\begin{align*}
+factor          &\to identifier \mid constant \mid \text{(} \; expression \; \text{)}
+\end{align*}
+
+
+E \texttt{factorA()} adiciona os prefixos opcionais:
+\begin{align*}
+factor\!-\!a    &\to \text{not } factor \mid \text{-} factor \mid factor
+\end{align*}
+
+\section{Conjuntos FIRST e FOLLOW}
+
+\begingroup
+\centering
+\begin{longtable}{|l|p{6cm}|p{6cm}|}
+\hline
+\textbf{Não-terminal} & \textbf{FIRST} & \textbf{FOLLOW} \\ \hline
+\endfirsthead
+\hline
+\textbf{Não-terminal} & \textbf{FIRST} & \textbf{FOLLOW} \\ \hline
+\endhead
+\hline
+\endfoot
+\endlastfoot
+
+program         & class                                  & \$ \\ \hline
+decl-list       & int string float $\lambda$              & \{ \\ \hline
+decl            & int string float                        & ; \\ \hline
+ident-list      & $[A-Za-z]$                              & ; \\ \hline
+type            & int string float                        & $[A-Za-z]$ \\ \hline
+body            & \{                                      & \} \\ \hline
+stmt-list       & $[A-Za-z]$ if do repeat read write      & \} \\ \hline
+stmt            & $[A-Za-z]$ if do repeat read write      & ; \\ \hline
+assign-stmt     & $[A-Za-z]$                              & ; \\ \hline
+if-stmt         & if                                       & ; \\ \hline
+if-stmt'        & else $\lambda$                           & ; \\ \hline
+do-stmt         & do                                       & ; \\ \hline
+do-suffix       & while                                    & ; \\ \hline
+repeat-stmt     & repeat                                   & ; \\ \hline
+stmt-suffix     & until                                    & ; \\ \hline
+read-stmt       & read                                     & ; \\ \hline
+write-stmt      & write                                    & ; \\ \hline
+writable        & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & ) \\ \hline
+condition       & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & ) \\ \hline
+expression      & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & ) \\ \hline
+expression'     & > >= < <= <> = $\lambda$                 & ) \\ \hline
+simple-expr     & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & ) > >= < <= <> = ; \\ \hline
+simple-expr'    & or + - $\lambda$                         & ) > >= < <= <> = ; \\ \hline
+term            & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & or + - ) > >= < <= <> = ; \\ \hline
+term'           & * / \% and $\lambda$                     & or + - ) > >= < <= <> = ; \\ \hline
+factor-a        & $[A-Za-z]$ $[1-9]$ 0 " ( not -          & * / \% and or + - ) > >= < <= <> = ; \\ \hline
+factor          & $[A-Za-z]$ $[1-9]$ 0 " (                & * / \% and or + - ) > >= < <= <> = ; \\ \hline
+relop           & > >= < <= <> =                           & $[A-Za-z]$ $[1-9]$ 0 " ( not - \\ \hline
+addop           & or + -                                   & $[A-Za-z]$ $[1-9]$ 0 " ( not - \\ \hline
+mulop           & * / \% and                               & $[A-Za-z]$ $[1-9]$ 0 " ( not - \\ \hline
+constant        & $[1-9]$ 0 "                              & * / \% and or + - ) > >= < <= <> = ; \\ \hline
+parte\_real     & . $\lambda$                              & * / \% and or + - ) > >= < <= <> = ; \\ \hline
+integer\_const  & $[1-9]$ 0                                & . * / \% and or + - ) > >= < <= <> = ; \\ \hline
+literal         & "                                        & * / \% and or + - ) > >= < <= <> = ; \\ \hline
+identifier      & $[A-Za-z]$                              & \{ ; , \} := ) * / \% and or + - > >= < <= <> = \\ \hline
+letter          & $[A-Za-z]$                              & \{ ; , \} := ) * / \% and or + - > >= < <= <> = $[A-Za-z]$ $[0-9]$ \\ \hline
+digit           & $[0-9]$                                 & * / \% and or + - ) > >= < <= <> = $[0-9]$ . \{ ; , \} := $[A-Za-z]$ \\ \hline
+nonzero         & $[1-9]$                                 & . * / \% and or + - ) > >= < <= <> = $[0-9]$ \\ \hline
+caractere       & ASCII, exceto aspas e /n                & " \\ \hline
+\end{longtable}
+\endgroup
+
+\normalfont\normalsize
+
+\section{Estrutura da Implementação Sintática}
+
+O parser é estruturado em torno de três funções auxiliares:
+
+\begin{itemize}
+    \item \texttt{advance()} --- chama \texttt{lex.scan()} para avançar o lookahead, tratando exceções de leitura.
+    \item \texttt{match(int tag)} --- verifica se o token corrente corresponde ao esperado; em caso positivo, avança; em caso negativo, chama \texttt{error()}.
+    \item \texttt{error(String msg)} --- exibe a linha (\texttt{Lexer.line}) e a mensagem, e encerra com \texttt{System.exit(1)}.
+\end{itemize}
+
+O ponto de entrada é o método público \texttt{program()}, chamado diretamente pela \texttt{Main}:
+
+\begin{lstlisting}[language=Java, caption=Classe principal (Main.java)]
+import lexico.Lexer;
+import sintatico.Parser;
+
+public class Main {
+    public static void main(String[] args) {
+        try {
+            Lexer lex = new Lexer(args[0]);
+            Parser parser = new Parser(lex);
+            parser.program();
+            System.out.println("Programa sintaticamente correto.");
+        } catch (FileNotFoundException e) {
+            System.err.println("Arquivo nao encontrado.");
+        } catch (IOException e) {
+            System.err.println("Erro de leitura: " + e.getMessage());
+        }
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=Java, caption=Esqueleto do Parser]
+package sintatico;
+
+import lexico.*;
+
+public class Parser {
+    private Lexer lex;
+    private Token lookahead;
+
+    public Parser(Lexer lex) {
+        this.lex = lex;
+        advance();
+    }
+
+    private void advance() {
+        try {
+            lookahead = lex.scan();
+        } catch (Exception e) {
+            error("Erro de leitura: " + e.getMessage());
+        }
+    }
+
+    private void match(int tag) {
+        if (lookahead.tag == tag) {
+            advance();
+        } else {
+            error("Esperado " + tagToString(tag)
+                + ", encontrado " + tokenToString(lookahead));
+        }
+    }
+
+    private void error(String msg) {
+        System.err.println("Erro sintatico na linha "
+            + Lexer.line + ": " + msg);
+        System.exit(1);
+    }
+
+    public void program() {
+        match(Tag.CLASS);
+        match(Tag.ID);
+        match('{');
+        if (isDeclListStart()) declList();
+        body();
+        match('}');
+        if (lookahead.tag != -1)
+            error("Conteudo extra apos o fim do programa");
+    }
+
+    // if_stmt ::= if ( condition ) { stmt_list } if_stmt'
+    private void ifStmt() {
+        match(Tag.IF);
+        match('(');
+        condition();
+        match(')');
+        match('{');
+        stmtList();
+        match('}');
+        ifStmtPrime();
+    }
+
+    // if_stmt' ::= else { stmt_list } | epsilon
+    private void ifStmtPrime() {
+        if (lookahead.tag == Tag.ELSE) {
+            match(Tag.ELSE);
+            match('{');
+            stmtList();
+            match('}');
+        }
+    }
+}
+\end{lstlisting}
+
+\normalfont\normalsize
+
+\section{Casos de Teste (7 a 12)}
+
+Conforme as diretrizes da Etapa 2, os testes 7 a 12 são versões dos testes 1 a 6 com ajustes incrementais para eliminar erros léxicos e sintáticos. Para cada teste, executou-se o parser, identificou-se o primeiro erro, corrigiu-se a entrada e reexecutou-se até a aprovação completa.
+
+\subsection{Teste 7 --- Cálculo de área}
+
+\textbf{1º erro -- identificador começando com dígito}
+
+\begin{lstlisting}[language=Java]
+class Teste1{
+    int base, 1altura;
+    float area;
+
+    write("Digite o valor da base:");
+    read (base);
+    write("Digite o valor da altura:");
+    read (altura;
+    area :=base*altura/2.0
+    write("A area e: " + area);
+}
+\end{lstlisting}
+
+Código 5: Teste7.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste7.txt
+Erro sintatico na linha 2: Esperado identificador, encontrado numero 1
+\end{lstlisting}
+
+Análise: O identificador \texttt{1altura} inicia com dígito. O lexer tokeniza \texttt{1} como número e \texttt{altura} como identificador. Após a vírgula em \texttt{base,}, o parser espera um identificador para a lista de declarações, mas encontra o número \texttt{1}.
+
+Correção: \texttt{1altura} $\to$ \texttt{altura1}
+
+\textbf{2º erro -- corpo sem chaves de abertura e fechamento}
+
+\begin{lstlisting}[language=Java]
+class Teste1{
+    int base, altura1;
+    float area;
+
+    write("Digite o valor da base:");
+    read (base);
+    write("Digite o valor da altura:");
+    read (altura;
+    area :=base*altura/2.0
+    write("A area e: " + area);
+}
+\end{lstlisting}
+
+Código 5.1: Teste7\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste7_corrigido1.txt
+Erro sintatico na linha 5: Esperado '{', encontrado 'write'
+\end{lstlisting}
+
+Análise: Após as declarações de variáveis, o parser espera \texttt{\{} para iniciar o corpo (\texttt{body}) da classe, mas encontra \texttt{write}.
+
+Correção: Adicionado par de chaves \texttt{\{} \texttt{\}} (abertura e fechamento) para o corpo
+
+\textbf{3º erro -- parêntese não fechado}
+
+\begin{lstlisting}[language=Java]
+class Teste1{
+    int base, altura1;
+    float area;
+    {
+    write("Digite o valor da base:");
+    read (base);
+    write("Digite o valor da altura:");
+    read (altura;
+    area :=base*altura/2.0
+    write("A area e: " + area);
+    }
+}
+\end{lstlisting}
+
+Código 5.2: Teste7\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste7_corrigido2.txt
+Erro sintatico na linha 8: Esperado ')', encontrado ';'
+\end{lstlisting}
+
+Análise: O comando \texttt{read (altura;} não possui o parêntese de fechamento. O parser encontra \texttt{;} e esperava \texttt{)}.
+
+Correção: \texttt{read(altura;} $\to$ \texttt{read(altura);}
+
+\textbf{4º erro -- ponto e vírgula ausente}
+
+\begin{lstlisting}[language=Java]
+class Teste1{
+    int base, altura1;
+    float area;
+    {
+    write("Digite o valor da base:");
+    read (base);
+    write("Digite o valor da altura:");
+    read (altura);
+    area :=base*altura/2.0
+    write("A area e: " + area);
+    }
+}
+\end{lstlisting}
+
+Código 5.3: Teste7\_corrigido3.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste7_corrigido3.txt
+Erro sintatico na linha 10: Esperado ';', encontrado 'write'
+\end{lstlisting}
+
+Análise: A atribuição \texttt{area := base * altura / 2.0} não possui \texttt{;} ao final. O parser encontra \texttt{write} na linha seguinte.
+
+Correção: Adicionado \texttt{;} ao final de \texttt{area := base * altura / 2.0}
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class Teste1{
+    int base, altura1;
+    float area;
+    {
+    write("Digite o valor da base:");
+    read (base);
+    write("Digite o valor da altura:");
+    read (altura);
+    area :=base*altura/2.0;
+    write("A area e: " + area);
+    }
+}
+\end{lstlisting}
+
+Código 6: Teste7\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste7_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\subsection{Teste 8 --- Comentários e if-else}
+
+\textbf{1º erro -- corpo sem chaves de abertura e fechamento}
+
+\begin{lstlisting}[language=Java]
+class Teste2{
+    /* Teste de comentario
+    com mais de uma linha */
+    float a;
+
+    write("Entre com o valor de a: ");
+    read (a);
+
+    if (a%2 = 0){
+        write (a+ "e par").
+    }
+    else{
+        write (a+ "e impar");
+    }
+}
+\end{lstlisting}
+
+Código 7: Teste8.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste8.txt
+Erro sintatico na linha 6: Esperado '{', encontrado 'write'
+\end{lstlisting}
+
+Análise: Após a declaração \texttt{float a;}, o corpo (\texttt{body}) espera \texttt{\{} para iniciar a lista de comandos, mas encontra \texttt{write}.
+
+Correção: Adicionado par de chaves \texttt{\{} \texttt{\}} (abertura e fechamento) para o corpo, antes e depois dos comandos
+
+\textbf{2º erro -- ponto final no lugar de ponto e vírgula}
+
+\begin{lstlisting}[language=Java]
+class Teste2{
+    /* Teste de comentario
+    com mais de uma linha */
+    float a;
+    {
+    write("Entre com o valor de a: ");
+    read (a);
+
+    if (a%2 = 0){
+        write (a+ "e par").
+    }
+    else{
+        write (a+ "e impar");
+    }
+    }
+}
+\end{lstlisting}
+
+Código 7.1: Teste8\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste8_corrigido1.txt
+Erro sintatico na linha 10: Esperado ';', encontrado '.'
+\end{lstlisting}
+
+Análise: O comando \texttt{write (a+ "e par")} termina com ponto final (\texttt{.}) em vez de ponto e vírgula (\texttt{;}).
+
+Correção: \texttt{write (a+ "e par").} $\to$ \texttt{write (a+ "e par");}
+
+\textbf{3º erro -- ponto e vírgula ausente após if-else}
+
+\begin{lstlisting}[language=Java]
+class Teste2{
+    /* Teste de comentario
+    com mais de uma linha */
+    float a;
+    {
+    write("Entre com o valor de a: ");
+    read (a);
+
+    if (a%2 = 0){
+        write (a+ "e par");
+    }
+    else{
+        write (a+ "e impar");
+    }
+    }
+}
+\end{lstlisting}
+
+Código 7.2: Teste8\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste8_corrigido2.txt
+Erro sintatico na linha 15: Esperado ';', encontrado '}'
+\end{lstlisting}
+
+Análise: A gramática exige \texttt{;} após todo comando na \texttt{stmt-list}, incluindo o comando \texttt{if-else}. O parser encontra \texttt{\}} de fechamento do corpo e esperava \texttt{;} para finalizar o if-else.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} de fechamento do else
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class Teste2{
+    /* Teste de comentario
+    com mais de uma linha */
+    float a;
+    {
+    write("Entre com o valor de a: ");
+    read (a);
+
+    if (a%2 = 0){
+        write (a+ "e par");
+    }
+    else{
+        write (a+ "e impar");
+    };
+    }
+}
+\end{lstlisting}
+
+Código 8: Teste8\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste8_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\subsection{Teste 9 --- If aninhado}
+
+\textbf{1º erro -- corpo sem chaves de abertura e fechamento}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: );
+        read(c;
+
+        maior := 0;
+
+        if ( a>b && a>c )
+            maior = a;
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+\end{lstlisting}
+
+Código 7: Teste9.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9.txt
+Erro sintatico na linha 5: Esperado '{', encontrado 'write'
+\end{lstlisting}
+
+Análise: O \texttt{\{} na linha 2 é a abertura da classe (após \texttt{class MinhaClasse}). Após a declaração \texttt{float a, b, c;}, o corpo espera \texttt{\{} mas encontra \texttt{write}.
+
+Correção: Adicionado par de chaves \texttt{\{} \texttt{\}} (abertura e fechamento) para o corpo e fechado a string literal na linha 9
+
+\textbf{2º erro -- parêntese não fechado}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c;
+
+        maior := 0;
+
+        if ( a>b && a>c )
+            maior = a;
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.1: Teste9\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido1.txt
+Erro sintatico na linha 10: Esperado ')', encontrado ';'
+\end{lstlisting}
+
+Análise: \texttt{read(c;} não possui o parêntese de fechamento \texttt{)}.
+
+Correção: \texttt{read(c;} $\to$ \texttt{read(c);}
+
+\textbf{3º erro -- operador \texttt{\&\&} (primeira parte: substituir \texttt{\&\&} por \texttt{and})}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ( a>b && a>c )
+            maior = a;
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.2: Teste9\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido2.txt
+Erro sintatico na linha 14: Esperado ')', encontrado '&'
+\end{lstlisting}
+
+Análise: O operador \texttt{\&\&} não pertence à gramática.
+
+Correção: Substituir \texttt{\&\&} por \texttt{and}
+
+\textbf{4º erro -- operador \texttt{and} (segunda parte: adicionar parênteses nas expressões)}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ( a>b and a>c )
+            maior = a;
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.3: Teste9\_corrigido3a.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido3a.txt
+Erro sintatico na linha 14: Esperado ')', encontrado '>'
+\end{lstlisting}
+
+Análise: A simples substitui\c{c}\~ao de \texttt{\&\&} por \texttt{and} n\~ao \'e suficiente, pois \texttt{and} \'e um operador multiplicativo (mulop) na gram\'atica. A express\~ao \texttt{a>b and a>c} \'e interpretada como \texttt{a > (b and a) > c}. O analisador consome \texttt{a > b and a} e, ao encontrar o segundo \texttt{>}, espera o fechamento do par\^entese da condi\c{c}\~ao do if.
+
+Correção: Adicionar par\^enteses em cada express\~ao relacional: \texttt{(a>b)} e \texttt{(a>c)}
+
+\textbf{5º erro -- if externo sem chaves no corpo}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c))
+            maior = a;
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.4: Teste9\_corrigido4b.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido4b.txt
+Erro sintatico na linha 15: Esperado '{', encontrado 'maior'
+\end{lstlisting}
+
+
+Análise: O if externo n\~ao possui chaves para delimitar seu corpo. A gram\'atica exige \texttt{\{} ap\'os a condi\c{c}\~ao do \texttt{if} para iniciar o bloco de comandos.
+
+Corre\c{c}\~ao: Adicionar \texttt{\{} e \texttt{\}} ao redor de \texttt{maior = a;} (corpo do if externo)
+
+\textbf{6º erro -- atribuição com \texttt{=} no if externo}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior = a;
+        }
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.5: Teste9\_corrigido5.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido5.txt
+Erro sintatico na linha 15: Esperado :=, encontrado '='
+\end{lstlisting}
+
+
+Análise: O if externo agora possui chaves, mas a atribuição \texttt{maior = a;} utiliza \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{maior = a;} $\to$ \texttt{maior := a;}
+
+\textbf{7º erro -- else externo sem chaves}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.6: Teste9\_corrigido6.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido6.txt
+Erro sintatico na linha 18: Esperado '{', encontrado 'if'
+\end{lstlisting}
+
+
+Análise: O else externo n\~ao possui chaves. A gram\'atica exige \texttt{else \{ stmt-list \}}.
+
+Corre\c{c}\~ao: Adicionar \texttt{\{} e \texttt{\}} ao redor do corpo do else externo
+
+\textbf{8º erro -- if interno sem chaves no corpo}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c)
+                maior = b;
+            else
+                maior = c;
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.7: Teste9\_corrigido7.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido7.txt
+Erro sintatico na linha 19: Esperado '{', encontrado 'maior'
+\end{lstlisting}
+
+
+Análise: O if interno (\texttt{if (b>c)}) também precisa de chaves para seu corpo.
+
+Correção: Adicionar \texttt{\{} e \texttt{\}} ao redor de \texttt{maior = b;}
+
+\textbf{9º erro -- atribuição com \texttt{=} no if interno}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c){
+                maior = b;
+            }
+            else
+                maior = c;
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.8: Teste9\_corrigido8.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido8.txt
+Erro sintatico na linha 19: Esperado :=, encontrado '='
+\end{lstlisting}
+
+
+Análise: O if interno agora possui chaves, mas a atribuição \texttt{maior = b;} utiliza \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{maior = b;} $\to$ \texttt{maior := b;}
+
+\textbf{10º erro -- else interno sem chaves}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c){
+                maior := b;
+            }
+            else
+                maior = c;
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.9: Teste9\_corrigido9.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido9.txt
+Erro sintatico na linha 22: Esperado '{', encontrado 'maior'
+\end{lstlisting}
+Análise: O else interno n\~ao possui chaves para delimitar seu corpo.
+
+Corre\c{c}\~ao: Adicionar \texttt{\{} e \texttt{\}} ao redor de \texttt{maior = c;}
+
+\textbf{11º erro -- atribuição com \texttt{=} no else interno}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c){
+                maior := b;
+            }
+            else{
+                maior = c;
+            }
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.10: Teste9\_corrigido10.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido10.txt
+Erro sintatico na linha 22: Esperado :=, encontrado '='
+\end{lstlisting}
+
+Análise: O else interno agora possui chaves, mas a atribuição \texttt{maior = c;} utiliza \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{maior = c;} $\to$ \texttt{maior := c;}
+
+\textbf{12º erro -- ponto e vírgula ausente no if-else interno}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c){
+                maior := b;
+            }
+            else{
+                maior := c;
+            }
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.11: Teste9\_corrigido11.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido11.txt
+Erro sintatico na linha 24: Esperado ';', encontrado '}'
+\end{lstlisting}
+
+Análise: O if-else interno é um comando na \texttt{stmt-list} e deve terminar com \texttt{;}.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} de fechamento do else interno
+
+\textbf{13º erro -- ponto e vírgula ausente no if-else externo}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b>c){
+                maior := b;
+            }
+            else{
+                maior := c;
+            };
+        }
+
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 7.12: Teste9\_corrigido12.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido12.txt
+Erro sintatico na linha 26: Esperado ';', encontrado 'write'
+\end{lstlisting}
+
+Análise: O if-else externo também precisa de \texttt{;} para terminar o comando.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} de fechamento do else externo
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class MinhaClasse
+    {
+    float a, b, c;
+    {
+        write("Digite um numero");
+        read(a);
+        write("Digite outro numero: ");
+        read(b);
+        write("Digite mais um numero: ");
+        read(c);
+
+        maior := 0;
+
+        if ((a > b) and (a > c)){
+            maior := a;
+        }
+        else{
+            if (b > c){
+                maior := b;
+            }
+            else{
+                maior := c;
+            };
+        };
+        write("O maior numero e: ");
+        write(maior);
+    }
+}
+\end{lstlisting}
+
+Código 8: Teste9\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste9_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\subsection{Teste 10 --- Repeat-until}
+
+\textbf{1º erro -- programa sem a palavra-chave \texttt{class}}
+
+\begin{lstlisting}[language=Java]
+{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if (idade>0 && salario > 0 and bonus >= 0){
+            salarioLiquido = +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+}
+\end{lstlisting}
+
+Código 9: Teste10.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10.txt
+Erro sintatico na linha 1: Esperado class, encontrado '{'
+\end{lstlisting}
+
+Análise: O programa inicia diretamente com \texttt{\{} sem a palavra reservada \texttt{class}.
+
+Correção: Adicionado \texttt{class Teste4\{} antes do \texttt{\{} de abertura
+
+\textbf{2º erro -- corpo do programa sem chaves de abertura e fechamento}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if (idade>0 && salario > 0 and bonus >= 0){
+            salarioLiquido = +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.1: Teste10\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido1.txt
+Erro sintatico na linha 7: Esperado '{', encontrado 'repeat'
+\end{lstlisting}
+
+Análise: Após as declarações (\texttt{int}, \texttt{string}, \texttt{float}), o parser espera \texttt{\{} para iniciar o corpo (\texttt{body}), mas encontra \texttt{repeat}.
+
+Correção: Adicionado par de chaves \texttt{\{} \texttt{\}} (abertura e fechamento) para o corpo, antes e depois dos comandos
+
+\textbf{3º erro -- operador \texttt{\&\&} (primeira parte: substituir \texttt{\&\&} por \texttt{and})}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if (idade>0 && salario > 0 and bonus >= 0){
+            salarioLiquido = +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.2: Teste10\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido2.txt
+Erro sintatico na linha 18: Esperado ')', encontrado '&'
+\end{lstlisting}
+
+Análise: O operador \texttt{\&\&} não pertence à gramática.
+
+Correção: Substituir \texttt{\&\&} por \texttt{and}
+
+\textbf{4º erro -- operador \texttt{and} (segunda parte: adicionar parênteses nas expressões)}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if (idade>0 and salario > 0 and bonus >= 0){
+            salarioLiquido = +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.3: Teste10\_corrigido3a.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido3a.txt
+Erro sintatico na linha 18: Esperado ')', encontrado '>'
+\end{lstlisting}
+
+Análise: A simples substituição de \texttt{\&\&} por \texttt{and} não é suficiente, pois \texttt{and} é um operador multiplicativo (mulop) na gramática. A expressão \texttt{idade>0 and salario > 0} é interpretada como \texttt{idade > (0 and salario) > 0}, portanto o analisador espera \texttt{)} para fechar a condição do if.
+
+Correção: Adicionar parênteses em cada expressão relacional: \texttt{idade>0} $\to$ \texttt{(idade>0)}, \texttt{salario > 0} $\to$ \texttt{(salario > 0)}, \texttt{bonus >= 0} $\to$ \texttt{(bonus >= 0)}
+
+\textbf{5º erro -- atribuição com \texttt{=} em vez de \texttt{:=}}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            salarioLiquido = +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.4: Teste10\_corrigido3.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido3.txt
+Erro sintatico na linha 19: Esperado :=, encontrado '='
+\end{lstlisting}
+
+Análise: \texttt{salarioLiquido = ...} usa \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{=} $\to$ \texttt{:=}
+
+\textbf{6º erro -- expressão inválida após \texttt{:=}}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            salarioLiquido := +salario salario*0.11) + (bonus
+            109.8);
+            texto = nome + " " + sobrenome + ":";
+            write (text);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.5: Teste10\_corrigido4.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido4.txt
+Erro sintatico na linha 19: Fator esperado (identificador, constante, '(')
+\end{lstlisting}
+
+Análise: A expressão \texttt{+salario salario*0.11)} é inválida (operador unário \texttt{+} sem operando à esquerda, operandos justapostos). A linha foi removida na versão corrigida, simplificando o programa.
+
+Correção: Linha \texttt{salarioLiquido := ...} removida; \texttt{texto =} $\to$ \texttt{texto :=}; \texttt{write(text)} $\to$ \texttt{write(texto)}
+
+\textbf{7º erro -- sintaxe incorreta do repeat-until}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            texto := nome + " " + sobrenome + ":";
+            write (texto);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    {until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.6: Teste10\_corrigido5.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido5.txt
+Erro sintatico na linha 24: Esperado '}', encontrado '{'
+\end{lstlisting}
+
+Análise: O repeat-until deve ser \texttt{repeat \{ ... \} until (condição);}. O código usa \texttt{\{until} em vez de \texttt{\} until}.
+
+Correção: \texttt{\{until} $\to$ \texttt{\} until}
+
+\textbf{8º erro -- condição do until sem parênteses}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salrio);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            texto := nome + " " + sobrenome + ":";
+            write (texto);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    } until (idade <=0 or Salario <=0 or bonus <0);
+    }
+}
+}
+\end{lstlisting}
+
+Código 9.7: Teste10\_corrigido6.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido6.txt
+Erro sintatico na linha 24: Esperado ')', encontrado '<='
+\end{lstlisting}
+
+Análise: A condição do \texttt{until} usa encadeamento de operadores relacionais com \texttt{or}. A gramática só aceita uma expressão relacional por \texttt{expression} (produção \texttt{expression' ::= relop\;simple-expr\;|\;$\lambda$}). O \texttt{or} é tratado como operador aditivo dentro de \texttt{simple-expr}, deixando o próximo \texttt{<=} fora da expressão, foi feita a correção de todos esses casos na linha.
+
+Correção: \texttt{(idade <=0 or Salario <=0 or bonus <0)} $\to$ \texttt{((idade <= 0) or (salario <= 0) or (bonus < 0))}
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salario);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            texto := nome + " " + sobrenome + ":";
+            write (texto);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    } until ((idade <= 0) or (salario <= 0) or (bonus < 0));
+    }
+}
+\end{lstlisting}
+
+Código 10: Teste10\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste10_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\subsection{Teste 11 --- Fluxo de controle aninhado}
+
+\textbf{1º erro -- atribuição dentro da declaração}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior:=0, menor:=3;
+    int soma;
+    {
+        soma := 0;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        IF (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while (altura <= 0 or altura >=2.5);
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior = altura;
+                };
+                if (altura < menor){
+                    menor = Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11: Teste11.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11.txt
+Erro sintatico na linha 5: Esperado ';', encontrado ':='
+\end{lstlisting}
+
+Análise: A declaração \texttt{float ... maior:=0, menor:=3;} contém \texttt{:=}, que não é permitido em declarações (apenas identificadores separados por vírgula).
+
+Correção: \texttt{maior:=0, menor:=3} $\to$ \texttt{maior, menor} (atribuições movidas para o corpo)
+
+\textbf{2º erro -- \texttt{IF} maiúsculo}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    int soma;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        IF (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while (altura <= 0 or altura >=2.5);
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior = altura;
+                };
+                if (altura < menor){
+                    menor = Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11.1: Teste11\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido1.txt
+Erro sintatico na linha 15: Esperado :=, encontrado '('
+\end{lstlisting}
+
+Análise: \texttt{IF} (maiúsculo) é tratado como identificador (variável), não como palavra reservada \texttt{if}. O parser espera \texttt{:=} após um identificador.
+
+Correção: \texttt{IF} $\to$ \texttt{if}
+
+\textbf{3º erro -- condição do while sem parênteses}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    int soma;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        if (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while (altura <= 0 or altura >=2.5);
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior = altura;
+                };
+                if (altura < menor){
+                    menor = Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11.2: Teste11\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido2.txt
+Erro sintatico na linha 21: Esperado ')', encontrado '>='
+\end{lstlisting}
+
+Análise: A condição \texttt{(altura <= 0 or altura >= 2.5)} precisa de cada expressão relacional entre parênteses para o \texttt{or} funcionar corretamente.
+
+Correção: \texttt{(altura <= 0 or altura >= 2.5)} $\to$ \texttt{((altura <= 0) or (altura >= 2.5))}
+
+\textbf{4º erro -- atribuição com \texttt{=} em vez de \texttt{:=}}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    int soma;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        if (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while ((altura <= 0) or (altura >= 2.5));
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior = altura;
+                };
+                if (altura < menor){
+                    menor = Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11.3: Teste11\_corrigido3.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido3.txt
+Erro sintatico na linha 26: Esperado :=, encontrado '='
+\end{lstlisting}
+
+Análise: \texttt{maior = altura;} usa \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{maior = altura;} $\to$ \texttt{maior := altura;}
+
+\textbf{5º erro -- atribuição com \texttt{=} (segunda ocorrência)}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    int soma;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        if (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while ((altura <= 0) or (altura >= 2.5));
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior := altura;
+                };
+                if (altura < menor){
+                    menor = Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11.4: Teste11\_corrigido4.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido4.txt
+Erro sintatico na linha 29: Esperado :=, encontrado '='
+\end{lstlisting}
+
+Análise: \texttt{menor = Altura;} usa \texttt{=} em vez de \texttt{:=}.
+
+Correção: \texttt{menor = Altura;} $\to$ \texttt{menor := Altura;} (a correção de capitalização \texttt{Altura} $\to$ \texttt{altura} é semântica, não sintática)
+
+\textbf{6º erro -- ponto e vírgula ausente após if-else}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    int soma;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        if (qtd>=2){
+            I:=0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while ((altura <= 0) or (altura >= 2.5));
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior := altura;
+                };
+                if (altura < menor){
+                    menor := Altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+
+        }
+        else{
+            write("Quantidade invalida.");
+        }
+    }
+}
+\end{lstlisting}
+
+Código 11.5: Teste11\_corrigido5.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido5.txt
+Erro sintatico na linha 40: Esperado ';', encontrado '}'
+\end{lstlisting}
+
+Análise: O if-else é um comando na \texttt{stmt-list} e exige \texttt{;} ao final.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} de fechamento do else
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class A {
+    /** Verificando fluxo de controle
+    Programa com if e while aninhados **/
+    int i;
+    float soma, altura, media, maior, menor;
+    {
+        soma := 0;
+        maior := 0;
+        menor := 3;
+
+        write("Quantos dados deseja informar?");
+        read(qtd);
+
+        if (qtd>=2){
+            i := 0;
+            do{
+                do{
+                    write("Altura: ");
+                    read(altura);
+                }while ((altura <= 0) or (altura >= 2.5));
+
+                soma := soma+altura;
+                i := i + 1;
+                if (altura > maior){
+                    maior := altura;
+                };
+                if (altura < menor){
+                    menor := altura;
+                };
+            }while( i < qtd);
+
+            media := soma / qtd;
+            write("Media: " + media);
+        }
+        else{
+            write("Quantidade invalida.");
+        };
+    }
+}
+\end{lstlisting}
+
+Código 12: Teste11\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste11_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\subsection{Teste 12 --- If aninhado com repeat-until}
+
+\textbf{1º erro -- corpo sem chaves de abertura e fechamento}
+
+\begin{lstlisting}[language=Java]
+class Teste6 {
+    int numero, soma;
+    string mensagem;
+
+    soma := 0;
+
+    repeat {
+        write("Digite um numero (negativo para sair): ");
+        read(numero);
+
+        if (numero >= 0) {
+            if (numero % 2 = 0) {
+                mensagem := " par";
+            } else {
+                mensagem := " impar";
+            }
+            write("O numero " + numero + " eh" + mensagem);
+            soma := soma + numero;
+        }
+    } until (numero < 0);
+
+    write("Soma total: ");
+    write(soma);
+}
+\end{lstlisting}
+
+Código 13: Teste12.txt -- com erros
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste12.txt
+Erro sintatico na linha 5: Esperado '{', encontrado 'soma'
+\end{lstlisting}
+
+Análise: Após \texttt{string mensagem;}, o corpo espera \texttt{\{} mas encontra \texttt{soma := 0;}.
+
+Correção: Adicionado par de chaves \texttt{\{} \texttt{\}} (abertura e fechamento) para o corpo, antes e depois dos comandos
+
+\textbf{2º erro -- ponto e vírgula ausente no if-else interno}
+
+\begin{lstlisting}[language=Java]
+class Teste6 {
+    int numero, soma;
+    string mensagem;
+    {
+    soma := 0;
+
+    repeat {
+        write("Digite um numero (negativo para sair): ");
+        read(numero);
+
+        if (numero >= 0) {
+            if (numero % 2 = 0) {
+                mensagem := " par";
+            } else {
+                mensagem := " impar";
+            }
+            write("O numero " + numero + " eh" + mensagem);
+            soma := soma + numero;
+        }
+    } until (numero < 0);
+
+    write("Soma total: ");
+    write(soma);
+    }
+}
+\end{lstlisting}
+
+Código 13.1: Teste12\_corrigido1.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste12_corrigido1.txt
+Erro sintatico na linha 17: Esperado ';', encontrado 'write'
+\end{lstlisting}
+
+Análise: O if-else interno (\texttt{if (numero \% 2 = 0) \{ ... \} else \{ ... \}}) não possui \texttt{;} ao final.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} do else interno
+
+\textbf{3º erro -- ponto e vírgula ausente no if-else externo}
+
+\begin{lstlisting}[language=Java]
+class Teste6 {
+    int numero, soma;
+    string mensagem;
+    {
+    soma := 0;
+
+    repeat {
+        write("Digite um numero (negativo para sair): ");
+        read(numero);
+
+        if (numero >= 0) {
+            if (numero % 2 = 0) {
+                mensagem := " par";
+            } else {
+                mensagem := " impar";
+            };
+            write("O numero " + numero + " eh" + mensagem);
+            soma := soma + numero;
+        }
+    } until (numero < 0);
+
+    write("Soma total: ");
+    write(soma);
+    }
+}
+\end{lstlisting}
+
+Código 13.2: Teste12\_corrigido2.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste12_corrigido2.txt
+Erro sintatico na linha 20: Esperado ';', encontrado '}'
+\end{lstlisting}
+
+Análise: O if-else externo também precisa de \texttt{;} para terminar o comando na \texttt{stmt-list}.
+
+Correção: Adicionado \texttt{;} após o \texttt{\}} do if externo
+
+\textbf{Teste aprovado}
+
+\begin{lstlisting}[language=Java]
+class Teste6 {
+    int numero, soma;
+    string mensagem;
+    {
+    soma := 0;
+
+    repeat {
+        write("Digite um numero (negativo para sair): ");
+        read(numero);
+
+        if (numero >= 0) {
+            if (numero % 2 = 0) {
+                mensagem := " par";
+            } else {
+                mensagem := " impar";
+            };
+            write("O numero " + numero + " eh" + mensagem);
+            soma := soma + numero;
+        };
+    } until (numero < 0);
+
+    write("Soma total: ");
+    write(soma);
+    }
+}
+\end{lstlisting}
+
+Código 14: Teste12\_corrigido.txt
+
+\begin{lstlisting}[language=bash]
+> java -cp out Main compilador\Teste12_corrigido.txt
+Programa sintaticamente correto.
+\end{lstlisting}
+
+\section{Conclusão}
+
+A adequação da gramática para $LL(1)$ viabilizou o desenvolvimento de um analisador sintático descendente recursivo determinístico, com varredura linear e sem retrocesso. O uso dos conjuntos $FIRST$ e $FOLLOW$ guiou a implementação das rotinas de parsing, resultando em mensagens de erro precisas com linha e token causador. A organização em pacotes separados (\texttt{lexico}, \texttt{sintatico}, \texttt{tabela}) mantém a modularidade do código para as etapas futuras de análise semântica.
+
+\end{document}

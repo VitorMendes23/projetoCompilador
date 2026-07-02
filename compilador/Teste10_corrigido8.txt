@@ -1,0 +1,26 @@
+class Teste4{
+    // Outro programa de teste
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("Digite o seu nome: ");
+        read(nome);
+        write("Digite o seu sobrenome");
+        read(sobrenome);
+        write("Digite a sua idade: ");
+        read (idade);
+        write("Digite o salario: ");
+        read (salario);
+        write("Digite o bonus: ");
+        read (bonus);
+        if ((idade>0) and (salario > 0) and (bonus >= 0)){
+            texto := nome + " " + sobrenome + ":";
+            write (texto);
+            write("Salario liquido: ");
+            write(salario);
+        };
+    } until ((idade <= 0) or (salario <= 0) or (bonus < 0));
+    }
+}

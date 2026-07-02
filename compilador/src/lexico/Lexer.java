@@ -123,8 +123,8 @@ public class Lexer {
         switch (ch) {
             case '<':
                 readch();
-                if (ch == '=') return Word.le;
-                if (ch == '>') return Word.ne;
+                if (ch == '=') { ch = ' '; return Word.le; }
+                if (ch == '>') { ch = ' '; return Word.ne; }
                 return new Token('<');
             case '>':
                 if (readch('=')) return Word.ge;

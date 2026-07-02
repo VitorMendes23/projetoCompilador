@@ -1,0 +1,11 @@
+class Teste4{
+    int idade;
+    string nome, texto;
+    float bonus, salario;
+    {
+    repeat{
+        write("teste");
+        read(nome);
+    } until (idade > 0);
+    }
+}

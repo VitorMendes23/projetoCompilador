@@ -1,0 +1,10 @@
+class Teste4{
+    int idade;
+    float salario;
+    {
+    repeat{
+        write("teste");
+        read(idade);
+    } until (idade <= 0);
+    }
+}

@@ -2,38 +2,38 @@ class A {
     /** Verificando fluxo de controle
     Programa com if e while aninhados **/
     int i;
-    float soma, altura, media, maior:=0, menor:=3;
-    int soma;
+    float soma, altura, media, maior, menor;
     {
         soma := 0;
+        maior := 0;
+        menor := 3;
 
         write("Quantos dados deseja informar?");
         read(qtd);
 
-        IF (qtd>=2){
-            I:=0;
+        if (qtd>=2){
+            i := 0;
             do{
                 do{
                     write("Altura: ");
                     read(altura);
-                }while (altura <= 0 or altura >=2.5);
+                }while ((altura <= 0) or (altura >= 2.5));
 
                 soma := soma+altura;
                 i := i + 1;
                 if (altura > maior){
-                    maior = altura;
+                    maior := altura;
                 };
                 if (altura < menor){
-                    menor = Altura;
+                    menor := altura;
                 };
             }while( i < qtd);
 
             media := soma / qtd;
             write("Media: " + media);
-
         }
         else{
             write("Quantidade invalida.");
-        }
+        };
     }
 }

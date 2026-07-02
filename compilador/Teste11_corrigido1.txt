@@ -2,10 +2,12 @@ class A {
     /** Verificando fluxo de controle
     Programa com if e while aninhados **/
     int i;
-    float soma, altura, media, maior:=0, menor:=3;
+    float soma, altura, media, maior, menor;
     int soma;
     {
         soma := 0;
+        maior := 0;
+        menor := 3;
 
         write("Quantos dados deseja informar?");
         read(qtd);

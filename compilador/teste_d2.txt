@@ -1,0 +1,8 @@
+class Teste{
+    int x;
+    {
+    repeat{
+        write("a");
+    } until (x <= 0);
+    }
+}
