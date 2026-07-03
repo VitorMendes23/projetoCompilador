@@ -1,1 +1,24 @@
+# IDE
+.idea/
+*.iml
+
+# Compiled Java
 out/
+compilador/bin/
+compilador/out/
+*.class
+
+# OCaml generated
+vm-1.7/*.cmo
+vm-1.7/*.cmi
+vm-1.7/*.cmx
+vm-1.7/*.o
+vm-1.7/code_lexer.ml
+vm-1.7/code_parser.ml
+vm-1.7/code_parser.mli
+vm-1.7/parser.output
+vm-1.7/version.ml
+
+# OS
+.DS_Store
+Thumbs.db
