@@ -1,12 +1,21 @@
 package tabela;
 
-public class Id {
-    public String lexeme;
-    public String type;
+import codigo.Type;
 
-    public Id(String lexeme, String type) {
+public class Id {
+    public static final int VAR = 0;
+    public static final int RESERVED = 1;
+
+    public String lexeme;
+    public Type type;
+    public int kind;
+    public int offset;
+
+    public Id(String lexeme, Type type, int kind) {
         this.lexeme = lexeme;
         this.type = type;
+        this.kind = kind;
+        this.offset = -1;
     }
 
     @Override

@@ -24,6 +24,14 @@ public class Env {
         return null;
     }
 
+    public Id getCurrentScope(String lexeme) {
+        return table.get(lexeme);
+    }
+
+    public int size() {
+        return table.size();
+    }
+
     public void print() {
         List<String> keys = new ArrayList<>(table.keySet());
         Collections.sort(keys);

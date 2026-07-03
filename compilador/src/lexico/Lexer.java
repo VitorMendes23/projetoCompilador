@@ -1,5 +1,6 @@
 package lexico;
 
+import codigo.Type;
 import tabela.Env;
 import tabela.Id;
 
@@ -15,7 +16,7 @@ public class Lexer {
 
     private void reserve(Word w) {
         words.put(w.getLexeme(), w);
-        topEnv.put(w.getLexeme(), new Id(w.getLexeme(), "reserved"));
+        topEnv.put(w.getLexeme(), new Id(w.getLexeme(), null, Id.RESERVED));
     }
 
     public Lexer(String fileName) throws FileNotFoundException {
@@ -189,11 +190,6 @@ public class Lexer {
             Word w = words.get(s);
             if (w != null) return w;
 
-            Id id = topEnv.get(s);
-            if (id == null) {
-                id = new Id(s, null);
-                topEnv.put(s, id);
-            }
             return new Word(s, Tag.ID);
         }
 
@@ -216,6 +212,10 @@ public class Lexer {
         Token t = new Token(ch);
         readch(); // avança para o próximo caractere
         return t;
+    }
+
+    public Env getEnv() {
+        return topEnv;
     }
 
     public void printSymbolTable() {
