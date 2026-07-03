@@ -1,0 +1,52 @@
+code.cmo: util.cmi label.cmi instr.cmi hstring.cmi code_parser.cmi \
+    code_lexer.cmo code.cmi 
+code.cmx: util.cmx label.cmx instr.cmi hstring.cmx code_parser.cmx \
+    code_lexer.cmx code.cmi 
+code_lexer.cmo: instr.cmi code_parser.cmi 
+code_lexer.cmx: instr.cmi code_parser.cmx 
+code_parser.cmo: label.cmi instr.cmi hstring.cmi code_parser.cmi 
+code_parser.cmx: label.cmx instr.cmi hstring.cmx code_parser.cmi 
+gmain.cmo: vm.cmi version.cmo maze.cmi label.cmi instr.cmi hstring.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gtkTree.cmo \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gobject.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/glib.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gdkKeysyms.cmo \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gWindow.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gTree.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gToolbox.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gPack.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMisc.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMenu.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMain.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gDraw.cmi \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gBin.cmi code.cmi 
+gmain.cmx: vm.cmx version.cmx maze.cmx label.cmx instr.cmi hstring.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gtkTree.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gobject.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/glib.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gdkKeysyms.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gWindow.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gTree.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gToolbox.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gPack.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMisc.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMenu.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gMain.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gDraw.cmx \
+    /usr/lib/ocaml/3.10.0/lablgtk2/gBin.cmx code.cmx 
+hstring.cmo: hstring.cmi 
+hstring.cmx: hstring.cmi 
+label.cmo: label.cmi 
+label.cmx: label.cmi 
+main.cmo: vm.cmi version.cmo maze.cmi code_lexer.cmo code.cmi 
+main.cmx: vm.cmx version.cmx maze.cmx code_lexer.cmx code.cmx 
+maze.cmo: maze.cmi 
+maze.cmx: maze.cmi 
+util.cmo: util.cmi 
+util.cmx: util.cmi 
+vm.cmo: util.cmi maze.cmi label.cmi instr.cmi hstring.cmi code.cmi vm.cmi 
+vm.cmx: util.cmx maze.cmx label.cmx instr.cmi hstring.cmx code.cmx vm.cmi 
+code.cmi: instr.cmi 
+code_parser.cmi: instr.cmi 
+instr.cmi: label.cmi hstring.cmi 
+vm.cmi: hstring.cmi code.cmi 
