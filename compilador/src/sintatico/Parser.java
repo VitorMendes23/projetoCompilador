@@ -666,10 +666,10 @@ public class Parser {
             switch (op) {
                 case "=": vm.emit("EQUAL"); break;
                 case "<>": vm.emit("EQUAL"); vm.emit("NOT"); break;
-                case "<": vm.emit("FINF"); break;
-                case "<=": vm.emit("FINFEQ"); break;
-                case ">": vm.emit("FSUP"); break;
-                case ">=": vm.emit("FSUPEQ"); break;
+                case "<": vm.emit("INF"); break;
+                case "<=": vm.emit("INFEQ"); break;
+                case ">": vm.emit("SUP"); break;
+                case ">=": vm.emit("SUPEQ"); break;
             }
             return Type.BOOLEAN;
         }

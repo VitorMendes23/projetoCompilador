@@ -6,12 +6,12 @@ open Label
 open Hstring
 open Instr
 
-(* éléments sur la pile *)
+(* ï¿½lï¿½ments sur la pile *)
 
 type element = 
   | Int of int
   | Float of float
-  | StringA of Hstring.t (* chaîne *)
+  | StringA of Hstring.t (* chaï¿½ne *)
   | StackA  of int (* adresse dans la pile *)
   | CodeA   of int (* adresse de code *)
   | HeapA   of int * int (* adresse dans le tas + offset *)
@@ -73,7 +73,7 @@ type t = {
   mutable count : int;
 }
 
-let init_value = 666 (* éviter 0 pour vérifier visuellement les init. *)
+let init_value = 666 (* ï¿½viter 0 pour vï¿½rifier visuellement les init. *)
 
 let stack_size = ref 10000
 let call_stack_size = ref 100
@@ -106,7 +106,7 @@ let set_call_stack_size n =
   call_stack_size := n;
   vm.calls <- Stack.resize vm.calls n
 
-(* (ré)initialisation *)
+(* (rï¿½)initialisation *)
 
 let init_strings () =
   vm.strings <- IntMap.empty;
@@ -134,9 +134,9 @@ let set_code c =
 
 let load_code f = set_code (Code.load_and_compile f)
 
-(* exécution *)
+(* exï¿½cution *)
 
-(* exceptions pouvant être levées durant l'exécution *)
+(* exceptions pouvant ï¿½tre levï¿½es durant l'exï¿½cution *)
   
 exception SegmentationFault
 exception IllegalOperand
@@ -146,7 +146,7 @@ exception Error of string
 
 (* fonction d'interaction *)
 
-let input_string = ref (fun () -> printf "read => @."; read_line ())
+let input_string = ref (fun () -> printf "read => "; let s = read_line () in printf "%s\n" s; s)
 
 let write_string = ref (fun s -> printf "%s@?" s)
 
@@ -182,7 +182,7 @@ let get_mouse = ref (fun () -> printf "get_mouse@."; 0,0)
 
 let refresh = ref (fun () -> () (* printf "Refresh@." *))
 
-(* diverses fonctions d'accès et de modification aux piles et aux tas *)
+(* diverses fonctions d'accï¿½s et de modification aux piles et aux tas *)
 
 let gp i =
   let a = vm.gp + i in
@@ -287,7 +287,7 @@ let free_bloc a =
   with Not_found ->
     raise SegmentationFault
 
-(* un pas d'exécution *)
+(* un pas d'exï¿½cution *)
 
 let step () = 
   if vm.pc < 0 || vm.pc >= Array.length vm.code then raise SegmentationFault;
@@ -295,7 +295,7 @@ let step () =
   vm.pc <- vm.pc + 1;
   vm.count <- vm.count + 1;
   match inst with
-  (* opérations sur les entiers *)
+  (* opï¿½rations sur les entiers *)
     | Add -> int_bin_op (+)
     | Sub -> int_bin_op (-)
     | Mul -> int_bin_op ( * )
@@ -305,7 +305,7 @@ let step () =
     | Irandom -> 
 	let n = pop_int () in 
 	push (Int (Random.int n))
-  (* opérations sur les réels *)
+  (* opï¿½rations sur les rï¿½els *)
     | Fadd -> float_bin_op (+.)
     | Fsub -> float_bin_op (-.)
     | Fmul -> float_bin_op ( *. )
@@ -317,27 +317,27 @@ let step () =
     | Frandom -> 
 	let n = pop_float () in 
 	push (Float (Random.float n))
-  (* opérations sur les adresses *)
+  (* opï¿½rations sur les adresses *)
     | Padd -> 
 	let ofs = pop_int () in
 	(match pop_value () with
 	   | StackA a -> push (StackA (a + ofs))
 	   | HeapA (a, n) -> push (HeapA (a, n + ofs))
 	   | _ -> raise IllegalOperand)
-  (* opération sur les chaînes *)
+  (* opï¿½ration sur les chaï¿½nes *)
     | Concat ->
 	let a1 = pop_string_a () in
 	let a2 = pop_string_a () in
 	let s = alloc_string (a1.str_it ^ a2.str_it) in
 	push (StringA s)
-  (* opérations sur le tas *)
+  (* opï¿½rations sur le tas *)
     | Alloc n -> 
 	let a = alloc_bloc n in push (HeapA (a, 0))
     | Allocn -> 
 	let n = pop_int () in let a = alloc_bloc n in push (HeapA (a,0))
     | Free -> 
 	let a = pop_heap_a () in free_bloc a
-  (* égalité *)
+  (* ï¿½galitï¿½ *)
     | Equal ->
 	let b = match pop_value (), pop_value () with
 	  | Int a, Int b
@@ -416,7 +416,7 @@ let step () =
 	  raise SegmentationFault;
 	Array.blit vm.stack (vm.sp - n) vm.stack vm.sp n;
 	vm.sp <- vm.sp + n
-  (* dépiler *)
+  (* dï¿½piler *)
     | Pop n ->
 	for i = 1 to n do ignore (pop (fun _ -> ()) ()) done
     | Popn ->
@@ -455,7 +455,7 @@ let step () =
 	let m = pop_value () in
 	push n; 
 	push m
-  (* entrées-sorties *)
+  (* entrï¿½es-sorties *)
     | Writei ->	
 	let n = pop_int () in 
 	if not !silent then !write_string (string_of_int n)
@@ -548,11 +548,11 @@ let step () =
   (* absurde *)
     | Label _ -> assert false
 
-(* exécution jusqu'à [Stop] ou jusqu'à la première exception *)
+(* exï¿½cution jusqu'ï¿½ [Stop] ou jusqu'ï¿½ la premiï¿½re exception *)
 	
 let run () = try while true do step () done with Exit -> ()
 
-(* écriture/lecture de l'état de la machine sur le disque *)
+(* ï¿½criture/lecture de l'ï¿½tat de la machine sur le disque *)
 
 let save f =
   let c = open_out f in
